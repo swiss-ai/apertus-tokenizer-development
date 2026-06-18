@@ -6,7 +6,7 @@ Preliminary Apertus v2 tokenizers and their Hugging Face config files.
 
 | path | build recipe |
 |------|--------------|
-| `preliminary_enh/` | European-data-boosted: consv2 ratios + eng5g, European language families re-sourced from FineWeb-2 (`quality_10`) at ~6 GB each, 90k global merges, `clean_multi_plus2_repcap8` pre-tokenizer, with a `<s> … </s>` post-processor (`nfc_clean_multi_plus2_repcap8_capped_hybrid_window_tuned_consv2_eudata_gm90k_v131k_sp124_eng5g_bospost`) |
+| `preliminary_euh/` | **EU-data heavy** — trained on a corpus weighted toward European data (European language families re-sourced from FineWeb-2 `quality_10` to ~6 GB each, on top of consv2 ratios + eng5g), so it is denser on EU languages and sparser on the long tail (e.g. Chinese) than a balanced multilingual tokenizer. 90k global merges, `clean_multi_plus2_repcap8` pre-tokenizer, `<s> … </s>` post-processor (`nfc_clean_multi_plus2_repcap8_capped_hybrid_window_tuned_consv2_eudata_gm90k_v131k_sp124_eng5g_bospost`) |
 | `preliminary_mul/` | consv2 ratios + eng5g, no tailcuts, `clean_multi_plus3_repcap8` (`nfc_clean_multi_plus3_repcap8_capped_hybrid_window_tuned_consv2_v131k_sp124_eng5g`) |
 
 Each folder contains `tokenizer.json`, `tokenizer_config.json`, and `special_tokens_map.json`. The same files are on the Hub at `cmeister/apertus_v2_tokenizer` under matching subfolders.
@@ -20,13 +20,14 @@ Each folder contains `tokenizer.json`, `tokenizer_config.json`, and `special_tok
 
 ## Per-folder differences
 
-| | `preliminary_enh` | `preliminary_mul` |
+| | `preliminary_euh` | `preliminary_mul` |
 |---|---|---|
+| data mix | **EU-data heavy** — European families re-sourced to ~6 GB each (denser EU, sparser long tail) | balanced consv2 — European families at their natural ~2–3 GB, no EU boost |
 | vocabulary size | 131072 (exact) | 131017 (target 131072; 55-token `ParityBpeTrainer` shortfall — size the embedding at 131072, the top 55 rows stay unused) |
 | pre-tokenizer | `clean_multi_plus2_repcap8` | `clean_multi_plus3_repcap8` |
 | post-processor | `<s> $A </s>` — `<s>`/`</s>` are added automatically when `add_special_tokens=True` (the default) | empty — no `<s>`/`</s>` added on `encode` |
 
-## Default encode behavior and caveats (`preliminary_enh`)
+## Default encode behavior and caveats (`preliminary_euh`)
 
 `tok("text")` / `tok.encode("text")` default to `add_special_tokens=True`, so a single sequence is wrapped as `<s> text </s>`. Apertus's own tokenizer prepends only `<s>` (no `</s>`), so this differs — two things to watch:
 
@@ -41,7 +42,7 @@ Each folder contains `tokenizer.json`, `tokenizer_config.json`, and `special_tok
 from transformers import AutoTokenizer
 
 # Local subfolder (run from the repo root):
-tok = AutoTokenizer.from_pretrained("preliminary_enh")
+tok = AutoTokenizer.from_pretrained("preliminary_euh")
 # the other candidate:
 # tok = AutoTokenizer.from_pretrained("preliminary_mul")
 
@@ -59,7 +60,7 @@ print(tok("Hello, world!", add_special_tokens=False).input_ids)  # [49816, 135, 
 Loading the same files from the Hub instead of a local checkout:
 
 ```python
-tok = AutoTokenizer.from_pretrained("cmeister/apertus_v2_tokenizer", subfolder="preliminary_enh")
+tok = AutoTokenizer.from_pretrained("cmeister/apertus_v2_tokenizer", subfolder="preliminary_euh")
 ```
 
 `preliminary_mul` has an empty post-processor, so its `tok("Hello, world!").input_ids` returns the content ids with no `<s>`/`</s>`.
@@ -71,7 +72,7 @@ The raw `Tokenizer` reads only `tokenizer.json`. It gives the encoder/decoder, t
 ```python
 from tokenizers import Tokenizer
 
-tok = Tokenizer.from_file("preliminary_enh/tokenizer.json")
+tok = Tokenizer.from_file("preliminary_euh/tokenizer.json")
 
 enc = tok.encode("Hello, world!")          # add_special_tokens defaults to True
 print(enc.ids)                  # [1, 49816, 135, 2818, 124, 2]
@@ -88,4 +89,4 @@ print(enc.tokens)               # ['<|user_start|>', 'hi', '<|user_end|>']
 
 ## Status
 
-Preliminary. `preliminary_enh` now prepends `<s>` and appends `</s>` via its post-processor (when `add_special_tokens=True`); `preliminary_mul` does not add them. The `chat_template` is still not written, so `apply_chat_template` is unavailable.
+Preliminary. `preliminary_euh` now prepends `<s>` and appends `</s>` via its post-processor (when `add_special_tokens=True`); `preliminary_mul` does not add them. The `chat_template` is still not written, so `apply_chat_template` is unavailable.
