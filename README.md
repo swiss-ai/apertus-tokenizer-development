@@ -7,13 +7,13 @@ Preliminary Apertus v2 tokenizers and their Hugging Face config files.
 | folder | vocab | post-processor | character |
 |---|---|---|---|
 | `preliminary_enh/` | 131072 | yes (`<s> … </s>`) | **English-preserving 131k** — English data boosted (~21 GB) + a moderate EU data boost + an Arabic data/ratio fix. English is slightly denser than the eng5g baseline, EU is improved, Arabic is near Apertus-v1 parity, Chinese ~v1. (`engfull_eu3`) |
-| `preliminary_euh/` | 131072 | yes | **EU-data heavy 131k** — European families re-sourced to ~6 GB each; densest on EU, sparser on the long tail (e.g. Chinese) than a balanced tokenizer. (`eudata` bospost) |
+| `preliminary_euh/` | 131072 | yes | **EU-dense 131k** — French/German data share boosted (plus a European data boost) with Sinotibetan cut: EU6/EU9 are *denser than Apertus v1* and French/German much improved, at the cost of Chinese and the long tail. (`frde2`) |
 | `preliminary_mul/` | 131017 | no | **Balanced consv2 baseline 131k** — no EU boost, no post-processor. (`consv2`) |
 | `preliminary_mul_200k/` | 200000 | yes | **200k all-rounder** — denser than Apertus v1 on EU, Chinese, Hindi and Arabic while holding English near parity; the larger vocab removes the head-vs-tail trade-off forced at 131k. (`eusino_v2c`) |
 
 Build recipes (variant keys in `train_tokenizer.py`):
 - `preliminary_enh`: `nfc_clean_multi_plus2_repcap8_capped_hybrid_window_tuned_consv2_engfull_eu3_gm110k_v131k_sp124_eng5g` + BOS/EOS post-processor
-- `preliminary_euh`: `nfc_clean_multi_plus2_repcap8_capped_hybrid_window_tuned_consv2_eudata_gm90k_v131k_sp124_eng5g_bospost`
+- `preliminary_euh`: `nfc_clean_multi_plus2_repcap8_capped_hybrid_window_tuned_consv2_frde2_gm110k_v131k_sp124_eng5g` + BOS/EOS post-processor
 - `preliminary_mul`: `nfc_clean_multi_plus3_repcap8_capped_hybrid_window_tuned_consv2_v131k_sp124_eng5g`
 - `preliminary_mul_200k`: `nfc_clean_multi_plus2_repcap8_capped_hybrid_window_tuned_consv2_eusino_v2c_gm120k_v200k_sp124_eng5g` + BOS/EOS post-processor
 
@@ -33,7 +33,7 @@ Each folder contains `tokenizer.json`, `tokenizer_config.json`, and `special_tok
 | vocabulary size | 131072 | 131072 | 131017 (target 131072; 55-token `ParityBpeTrainer` shortfall — size the embedding at 131072, top 55 rows unused) | 200000 |
 | pre-tokenizer | `clean_multi_plus2_repcap8` | `clean_multi_plus2_repcap8` | `clean_multi_plus3_repcap8` | `clean_multi_plus2_repcap8` |
 | post-processor | `<s> $A </s>` | `<s> $A </s>` | empty (none) | `<s> $A </s>` |
-| data character | English-boosted, moderate EU | EU-heavy | balanced consv2 | English-boosted, EU-heavy, tail-recouped |
+| data character | English-boosted, moderate EU | Fr/De-boosted, EU-dense (Chinese cut) | balanced consv2 | English-boosted, EU-heavy, tail-recouped |
 
 ## Default encode behavior and caveats (the post-processor folders: `enh`, `euh`, `mul_200k`)
 
