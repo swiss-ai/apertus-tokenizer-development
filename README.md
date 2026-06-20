@@ -2,6 +2,8 @@
 
 Preliminary Apertus v2 tokenizers and their Hugging Face config files.
 
+Intrinsic comparison of the four candidates: [REPORT_focus_candidates.md](REPORT_focus_candidates.md).
+
 ## Contents
 
 | folder | vocab | post-processor | character |
