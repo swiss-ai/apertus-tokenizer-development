@@ -5,11 +5,23 @@
 # Check scripts/tokenization/prepare_dumps.py
 # ⚠️ WARNING ⚠️
 
-NUMBER_OF_DATATROVE_TASKS=20
-TOKENIZER=/capstor/scratch/cscs/kpitas/projects/test_text_tokenization/apertus-tokenizer-development/preliminary_enh/tokenizer.json
+# task folders and key parameters
+TOKENIZER=./preliminary_enh/tokenizer.json
 TOKENIZER_NAME=new_tokenizer
 DATASET_NAME=some_name_dataset
 COLUMN_KEY=text
+PATH_TO_PREPROCESSING_METADATA=/capstor/scratch/cscs/kpitas/projects/test_text_tokenization/toy_text_data # Where dumps are stored
+PATH_TO_OUTPUT_FOLDER=/capstor/scratch/cscs/kpitas/projects/test_text_tokenization/toy_text_data          # Where outputs are saved
+
+# datatrove config
+NUMBER_OF_DATATROVE_TASKS=20
+
+# slurm config
+ACCOUNT=infra01
+NODES=1
+GPUS=4
+CPUS_PER_TASK=288
+NO_REQUEUE="--no-requeue"
 
 REHYDRATE=False # Set to True or False
 if [ "$REHYDRATE" = "True" ]; then
@@ -18,18 +30,14 @@ else
   REHYDRATE_FLAG=""
 fi
 
-MEGATRON_LM_DIR=/capstor/scratch/cscs/kpitas/projects/test_text_tokenization/Megatron-LM
-PATH_TO_PREPROCESSING_METADATA=/capstor/scratch/cscs/kpitas/projects/test_text_tokenization/toy_text_data     # Where dumps are stored
-PATH_TO_DATATROVE_LOGGING_DIR=/capstor/scratch/cscs/kpitas/projects/test_text_tokenization/toy_text_data/logs # Where datatrove logs are stored
-PATH_TO_SLURM_LOGGING_DIR=/capstor/scratch/cscs/kpitas/projects/test_text_tokenization/toy_text_data/slurm_logs
-PATH_TO_OUTPUT_FOLDER=/capstor/scratch/cscs/kpitas/projects/test_text_tokenization/toy_text_data # Where tokenized datasets are stored
+CSV_RESULTS_FILE=$PATH_TO_PREPROCESSING_METADATA/tokenize-$TOKENIZER_NAME-$DATASET_NAME.csv # Used later by tokenize.sh
+PATH_TO_DATATROVE_LOGGING_DIR=$PATH_TO_OUTPUT_FOLDER/logs/datatrove_logs                    # Where datatrove logs are stored
+PATH_TO_SLURM_LOGGING_DIR=$PATH_TO_OUTPUT_FOLDER/logs/slurm_logs                            # Where slurm logs are stored
+DATASET_OUTPUT_FOLDER_NAME=$PATH_TO_OUTPUT_FOLDER/$TOKENIZER_NAME/$DATASET_NAME             # Where tokenized data is stored
 
-DATASET_OUTPUT_FOLDER_NAME=$PATH_TO_OUTPUT_FOLDER/$TOKENIZER_NAME/$DATASET_NAME
-CSV_RESULTS_FILE=$PATH_TO_PREPROCESSING_METADATA/tokenize-$TOKENIZER_NAME-$DATASET_NAME.csv
-
-mkdir -p $DATASET_OUTPUT_FOLDER_NAME
+mkdir -p $PATH_TO_PREPROCESSING_METADATA/completed-dumps #used later by tokenize.sh
 mkdir -p $PATH_TO_SLURM_LOGGING_DIR
-mkdir -p $PATH_TO_PREPROCESSING_METADATA/completed-dumps
+mkdir -p $DATASET_OUTPUT_FOLDER_NAME
 ln -sfn $DATASET_OUTPUT_FOLDER_NAME $PATH_TO_PREPROCESSING_METADATA/tokenized-dir-link
 
 echo "slurm_job_id,node,start,end,paths_file,output_folder,dataset_total_size,processed_total_size,number_of_workers_per_node,time,bw,total_tokens_processed,throughput (Million Tokens/Second/Node)" >$CSV_RESULTS_FILE
@@ -38,5 +46,5 @@ for paths_file in "$PATH_TO_PREPROCESSING_METADATA/dumps"/*; do
   dump=$(grep -oP '(?<=paths_file_)\d+(?=\.txt)' <<<$paths_file)
   output_folder=$DATASET_OUTPUT_FOLDER_NAME/dump-$dump
   logging_dir=$PATH_TO_DATATROVE_LOGGING_DIR/$TOKENIZER_NAME/$DATASET_NAME/dump-$dump
-  sbatch --partition=debug --job-name=tokenize-$DATASET_NAME-dump-$dump --output=$PATH_TO_SLURM_LOGGING_DIR/R-%x-%j.out --error=$PATH_TO_SLURM_LOGGING_DIR/R-%x-%j.err $MEGATRON_LM_DIR/scripts/tokenization/tokenize.sh $PATH_TO_PREPROCESSING_METADATA/raw-dataset-link $output_folder $TOKENIZER $logging_dir $CSV_RESULTS_FILE $paths_file $NUMBER_OF_DATATROVE_TASKS $MEGATRON_LM_DIR $COLUMN_KEY $REHYDRATE_FLAG
+  sbatch --partition=debug --account=$ACCOUNT --nodes=$NODES --gres=gpu:$GPUS --cpus-per-task=$CPUS_PER_TASK $NO_REQUEUE --job-name=tokenize-$DATASET_NAME-dump-$dump --output=$PATH_TO_SLURM_LOGGING_DIR/R-%x-%j.out --error=$PATH_TO_SLURM_LOGGING_DIR/R-%x-%j.err tokenize.sh $PATH_TO_PREPROCESSING_METADATA/raw-dataset-link $output_folder $TOKENIZER $logging_dir $CSV_RESULTS_FILE $paths_file $NUMBER_OF_DATATROVE_TASKS $COLUMN_KEY $REHYDRATE_FLAG
 done

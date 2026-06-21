@@ -6,7 +6,7 @@
 #SBATCH --cpus-per-task=288
 #SBATCH --no-requeue
 
-ENV_FILE="/capstor/scratch/cscs/kpitas/projects/test_text_tokenization/env.toml"
+ENV_FILE="env.toml"
 
 input_folder=$1
 output_folder=$2
@@ -15,10 +15,9 @@ logging_dir=$4
 CSV_RESULTS_FILE=$5
 paths_file=$6
 number_of_tasks=$7
-MEGATRON_LM_DIR=$8
-COLUMN_KEY=$9
-REHYDRATE_FLAG=${10}
-EXTENSION=${11:-.parquet}
+COLUMN_KEY=$8
+REHYDRATE_FLAG=${9}
+EXTENSION=${10:-.parquet}
 
 set -eo pipefail
 
@@ -35,34 +34,34 @@ start=$(date +%s)
 
 # 2. Add srun --environment to execute the python command inside the container
 srun --environment=$ENV_FILE \
-    numactl --membind=0-3 \
-    python3 $MEGATRON_LM_DIR/scripts/tokenization/preprocess_megatron.py \
-    --tokenizer-name-or-path $tokenizer \
-    --output-folder $output_folder \
-    --logging-dir $logging_dir \
-    --n-tasks $number_of_tasks \
-    --dataset $input_folder \
-    --paths-file $paths_file \
-    --column $COLUMN_KEY \
-    $REHYDRATE_FLAG
+  numactl --membind=0-3 \
+  python3 preprocess_megatron.py \
+  --tokenizer-name-or-path $tokenizer \
+  --output-folder $output_folder \
+  --logging-dir $logging_dir \
+  --n-tasks $number_of_tasks \
+  --dataset $input_folder \
+  --paths-file $paths_file \
+  --column $COLUMN_KEY \
+  $REHYDRATE_FLAG
 
 end=$(date +%s)
 end_s=$(date)
 echo "FINISH TIME: $(date) | Preprocessed $paths_file ! Stored in $output_folder"
 
 # Stats
-wc=$((end-start))
+wc=$((end - start))
 
-dataset_total_size=$(srun --environment=$ENV_FILE python3 $MEGATRON_LM_DIR/scripts/tokenization/compute_dump_size.py $paths_file)
+dataset_total_size=$(srun --environment=$ENV_FILE python3 compute_dump_size.py $paths_file)
 
 processed_total_size=$(du -shLb $output_folder | cut -f1)
 
 bw=$(awk "BEGIN {print $dataset_total_size/$wc}")
-total_tokens_processed=$(($(du -shLcb $output_folder/*.bin | tail -n1 | sed -r 's/([^0-9]*([0-9]*)){1}.*/\2/')/4))
+total_tokens_processed=$(($(du -shLcb $output_folder/*.bin | tail -n1 | sed -r 's/([^0-9]*([0-9]*)){1}.*/\2/') / 4))
 throughput=$(awk "BEGIN {print $total_tokens_processed/$wc}")
 
 echo "$SLURM_JOB_ID,$(hostname),$start_s,$end_s,$paths_file,$output_folder,$dataset_total_size,$processed_total_size,$number_of_tasks,$wc,$bw,$total_tokens_processed,$throughput"
-echo "$SLURM_JOB_ID,$(hostname),$start_s,$end_s,$paths_file,$output_folder,$dataset_total_size,$processed_total_size,$number_of_tasks,$wc,$bw,$total_tokens_processed,$throughput" >> $CSV_RESULTS_FILE
+echo "$SLURM_JOB_ID,$(hostname),$start_s,$end_s,$paths_file,$output_folder,$dataset_total_size,$processed_total_size,$number_of_tasks,$wc,$bw,$total_tokens_processed,$throughput" >>$CSV_RESULTS_FILE
 
 sleep 10
 ls -lS $output_folder
