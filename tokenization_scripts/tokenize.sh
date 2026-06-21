@@ -5,6 +5,7 @@
 #SBATCH --gres=gpu:4
 #SBATCH --cpus-per-task=288
 #SBATCH --no-requeue
+#SBATCH --time=00:10:00
 
 ENV_FILE="./env.toml"
 
