@@ -5,23 +5,15 @@
 # Check scripts/tokenization/prepare_dumps.py
 # ⚠️ WARNING ⚠️
 
-# task folders and key parameters
-TOKENIZER=./preliminary_enh/tokenizer.json
-TOKENIZER_NAME=new_tokenizer
-DATASET_NAME=some_name_dataset
-COLUMN_KEY=text
-PATH_TO_PREPROCESSING_METADATA=/capstor/scratch/cscs/kpitas/projects/test_text_tokenization/toy_text_data # Where dumps are stored
-PATH_TO_OUTPUT_FOLDER=/capstor/scratch/cscs/kpitas/projects/test_text_tokenization/toy_text_data          # Where outputs are saved
+CONFIG_FILE=$1
 
-# datatrove config
-NUMBER_OF_DATATROVE_TASKS=20
-
-# slurm config
-ACCOUNT=infra01
-NODES=1
-GPUS=4
-CPUS_PER_TASK=288
-NO_REQUEUE="--no-requeue"
+# Check if the file exists, then load it
+if [ -f "$CONFIG_FILE" ]; then
+  source "$CONFIG_FILE"
+else
+  echo "Error: Config file $CONFIG_FILE not found."
+  exit 1
+fi
 
 REHYDRATE=False # Set to True or False
 if [ "$REHYDRATE" = "True" ]; then
