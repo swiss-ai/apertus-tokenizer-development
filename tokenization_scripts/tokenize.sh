@@ -6,7 +6,7 @@
 #SBATCH --cpus-per-task=288
 #SBATCH --no-requeue
 
-ENV_FILE="env.toml"
+ENV_FILE="./env.toml"
 
 input_folder=$1
 output_folder=$2
