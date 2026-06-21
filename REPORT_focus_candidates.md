@@ -114,9 +114,11 @@ Per-language compression across the tokenizers is plotted in
 [per_language_compression.svg](per_language_compression.svg) (PNG:
 [per_language_compression.png](per_language_compression.png)): one panel per
 tokenizer, with bars for 12 languages from the European head to the low-resource
-tail. Apertus v1 and o200k compress European text well but drop Tibetan to near
-the byte-level floor (0.43 and 0.68 chars/token). The four candidates hold the
-tail at 2.2 to 2.9, and `preliminary_mul_200k` is the most even across the set.
+tail. It uses FLORES sentences per token (parallel sentences, so comparable
+across scripts; the chars/token table above is not). Apertus v1 and o200k
+compress European text well but fragment the low-resource tail: Tibetan is 0.003
+and 0.005 sentences per token, against about 0.020 for the candidates.
+`preliminary_mul_200k` is the most even across the set.
 
 ## 2. Fairness: Gini coefficient and worst-language factor
 
