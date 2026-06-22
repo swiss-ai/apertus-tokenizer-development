@@ -13,13 +13,13 @@ Intrinsic comparison of the four candidates: [REPORT_focus_candidates.md](REPORT
 | `preliminary_enh/` | 131072 | yes (`<s> … </s>`) | **English-preserving 131k**: English data boosted (~21 GB) plus a moderate EU data boost and an Arabic data/ratio fix. English is slightly denser than the eng5g baseline, EU is denser, Arabic is near Apertus-v1 parity, Chinese is near v1. (`engfull_eu3`) |
 | `preliminary_euh/` | 131072 | yes | **EU-dense 131k**: French/German data share boosted (plus a European data boost) with a Sinotibetan cut. EU6/EU9 are denser than Apertus v1 and French/German are much denser, at the cost of Chinese and the long tail. (`frde2`) |
 | `preliminary_mul/` | 131072 | yes | **Balanced multilingual 131k**: consv2 with the reparam ratio adjustment. Denser EU than the plain consv2 base, with the same tail compression and fairness. (`consv2_reparam`) |
-| `preliminary_mul_200k/` | 200000 | yes | **200k all-rounder**: denser than Apertus v1 on EU, Chinese, Hindi, and Arabic, with English near parity. The larger vocabulary compresses both high-resource and low-resource languages well, which the 131k tokenizers do not. (`eusino_v2c`) |
+| `preliminary_mul_200k/` | 200000 | yes | **200k all-rounder, Fr/De-strong**: denser than Apertus v1 on EU (French 4.295, German 4.363 chars/token), Chinese, Hindi, and Arabic, with English near parity. The larger vocabulary compresses both high-resource and low-resource languages well, which the 131k tokenizers do not. (`eusino_v2c_frde_kr120`) |
 
 Build recipes (variant keys in `train_tokenizer.py`):
 - `preliminary_enh`: `nfc_clean_multi_plus2_repcap8_capped_hybrid_window_tuned_consv2_engfull_eu3_gm110k_v131k_sp124_eng5g` + BOS/EOS post-processor
 - `preliminary_euh`: `nfc_clean_multi_plus2_repcap8_capped_hybrid_window_tuned_consv2_frde2_gm110k_v131k_sp124_eng5g` + BOS/EOS post-processor
 - `preliminary_mul`: `nfc_clean_multi_plus3_repcap8_capped_hybrid_window_tuned_consv2_reparam_v131k_sp124_eng5g` + BOS/EOS post-processor
-- `preliminary_mul_200k`: `nfc_clean_multi_plus2_repcap8_capped_hybrid_window_tuned_consv2_eusino_v2c_gm120k_v200k_sp124_eng5g` + BOS/EOS post-processor
+- `preliminary_mul_200k`: `nfc_clean_multi_plus2_repcap8_capped_hybrid_window_tuned_consv2_eusino_v2c_frde_kr120_gm130k_v200k_sp124_eng5g` + BOS/EOS post-processor
 
 Each folder contains `tokenizer.json`, `tokenizer_config.json`, and `special_tokens_map.json`. The same files are on the Hub at `cmeister/apertus_v2_tokenizer` under matching subfolders.
 
@@ -37,7 +37,7 @@ Each folder contains `tokenizer.json`, `tokenizer_config.json`, and `special_tok
 | vocabulary size | 131072 | 131072 | 131072 | 200000 |
 | pre-tokenizer | `clean_multi_plus2_repcap8` | `clean_multi_plus2_repcap8` | `clean_multi_plus3_repcap8` | `clean_multi_plus2_repcap8` |
 | post-processor | `<s> $A </s>` | `<s> $A </s>` | `<s> $A </s>` | `<s> $A </s>` |
-| data character | English-boosted, moderate EU | Fr/De-boosted, EU-dense (Chinese cut) | balanced consv2 (reparam) | English-boosted, EU-heavy, tail recovered |
+| data character | English-boosted, moderate EU | Fr/De-boosted, EU-dense (Chinese cut) | balanced consv2 (reparam) | Fr/De-strong, EU-heavy, tail kept (eusino_v2c + frde_kr120) |
 
 ## Default encode behavior and caveats (all four folders)
 

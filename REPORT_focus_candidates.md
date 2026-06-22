@@ -14,7 +14,7 @@ The four candidates and their data character:
 | `preliminary_mul` | 131072 | balanced multilingual (consv2 + reparam) | `consv2_reparam` plus3 |
 | `preliminary_enh` | 131072 | English-preserving (English-boosted, moderate EU) | `engfull_eu3` |
 | `preliminary_euh` | 131072 | EU-dense, Fr/De-boosted (Chinese cut) | `frde2` |
-| `preliminary_mul_200k` | **200000** | 200k all-rounder (head + tail, no 131k trade-off) | `eusino_v2c` |
+| `preliminary_mul_200k` | **200000** | 200k all-rounder, Fr/De-strong (head + tail, no 131k trade-off) | `eusino_v2c_frde_kr120` |
 
 ## Primary recommendation
 
@@ -42,12 +42,12 @@ The other three are stronger on their own axes:
   and fairness gains. The better fit when English compression is the priority. It
   allocates less vocabulary to EU languages, which compress worse than in
   Apertus v1.
-- **`preliminary_mul_200k`** compresses both the high-resource and low-resource
-  languages well, which the 131k candidates do not. It has the highest EU,
-  Indic, FLORES, and worst-language-factor (3.53×) numbers, and compresses
-  English about as much as the others. This requires a 200k vocabulary. The
-  better fit if the larger embedding/output table (and the departure from
-  Apertus's 131k) is acceptable.
+- **`preliminary_mul_200k`** (frde_kr120 data scheme) compresses both the
+  high-resource and low-resource languages well, which the 131k candidates do
+  not. It has the highest EU and FLORES compression and the best worst-language
+  factor (3.61×), with English about as dense as the others. This requires a 200k
+  vocabulary. The better fit if the larger embedding/output table (and the
+  departure from Apertus's 131k) is acceptable.
 
 **`preliminary_mul_200k` is a 200k-vocabulary tokenizer, a 53% step up from the
 131k of the other three (and of Apertus v1).** A larger vocabulary gives higher
@@ -76,10 +76,10 @@ on the identical sample. `FLORES EU b/t` is bytes/token over the ten EU language
 | Tokenizer | FLORES60 sent/tok ↑ | FLORES200 sent/tok ↑ | FineWeb-Edu English b/t ↑ | FineWeb2-proportional b/t ↑ | FLORES EU b/t ↑ |
 |---|---|---|---|---|---|
 | Apertus v1 | 0.0198 | 0.0142 | 4.595 | 3.077 | 3.865 |
-| preliminary_mul | 0.0235 (+18.7%) | 0.0202 (+42.3%) | 4.333 (−5.7%) | 3.796 (+23.4%) | 3.780 (−2.2%) |
+| preliminary_mul | 0.0235 (+18.7%) | 0.0202 (+42.3%) | 4.333 (−5.7%) | **3.796 (+23.4%)** | 3.780 (−2.2%) |
 | preliminary_enh | 0.0223 (+12.6%) | 0.0199 (+40.1%) | 4.486 (−2.4%) | 3.621 (+17.7%) | 3.850 (−0.4%) |
 | preliminary_euh | 0.0219 (+10.6%) | 0.0195 (+37.3%) | 4.424 (−3.7%) | 3.559 (+15.7%) | 4.041 (+4.6%) |
-| **preliminary_mul_200k** | **0.0240 (+21.2%)** | **0.0208 (+46.5%)** | 4.508 (−1.9%) | **3.783 (+22.9%)** | **4.160 (+7.6%)** |
+| **preliminary_mul_200k** | **0.0239 (+20.7%)** | **0.0207 (+45.8%)** | 4.510 (−1.8%) | 3.791 (+23.2%) | **4.245 (+9.8%)** |
 | *o200k (200k ref)* | 0.0239 | 0.0176 | **4.786** | 3.533 | 4.040 (+4.5%) |
 
 All four candidates compress the multilingual sets much more than Apertus v1,
@@ -88,7 +88,7 @@ and compress English a few percent less. Among the 131k candidates,
 candidate has the highest FLORES numbers. o200k (same vocabulary size)
 compresses English more (4.786) and the full 205-language set much less (0.0176
 vs 0.0208), so the larger vocabulary alone does not give multilingual breadth. On
-the EU set, `preliminary_euh` (+4.6%) and `preliminary_mul_200k` (+7.6%)
+the EU set, `preliminary_euh` (+4.6%) and `preliminary_mul_200k` (+9.8%)
 compress more than Apertus v1; `euh` is the densest 131k tokenizer on EU.
 
 ### 1.1 Language character: FLORES chars/token (content-only; higher = denser; % diff vs Apertus v1)
@@ -101,7 +101,7 @@ This shows how each tokenizer allocates vocabulary across languages.
 | preliminary_mul | 4.554 (−4.0%) | 3.676 (−2.9%) | 3.710 (−13.6%) | 3.629 (−14.4%) | 3.846 (−4.4%) | **2.776 (+18.0%)** | **1.329 (+19.9%)** | **2.941 (+579.2%)** |
 | preliminary_enh | 4.715 (−0.6%) | 3.748 (−1.0%) | 3.771 (−12.2%) | 3.784 (−10.7%) | 3.899 (−3.1%) | 2.427 (+3.2%) | 1.134 (+2.3%) | 2.489 (+474.8%) |
 | preliminary_euh | 4.650 (−1.9%) | 3.937 (+4.0%) | **4.200 (−2.2%)** | **4.332 (+2.2%)** | 4.034 (+0.2%) | 2.328 (−1.0%) | 0.917 (−17.2%) | 2.222 (+413.2%) |
-| preliminary_mul_200k | 4.736 (−0.1%) | **4.050 (+7.0%)** | 4.055 (−5.6%) | 4.127 (−2.6%) | **4.243 (+5.4%)** | 2.802 (+19.1%) | 1.155 (+4.2%) | 2.533 (+485.0%) |
+| preliminary_mul_200k | 4.739 (−0.1%) | **4.129 (+9.1%)** | 4.295 (−0.0%) | 4.363 (+3.0%) | **4.239 (+5.4%)** | 2.759 (+17.3%) | 1.149 (+3.7%) | 2.518 (+481.6%) |
 
 EU-avg = deu/fra/spa/ita/por/nld/swe/pol/ron/dan. French, German, and Italian
 (Switzerland's national languages) are shown separately. `preliminary_euh` is
@@ -131,7 +131,7 @@ parallel FLORES content, between the worst-served language and English.
 | preliminary_mul | **0.088** | **0.105** | 3.63× (sat_Olck) |
 | preliminary_enh | 0.121 | 0.114 | 4.46× (sat_Olck) |
 | preliminary_euh | 0.138 | 0.122 | 4.67× (sat_Olck) |
-| preliminary_mul_200k | 0.113 | 0.112 | **3.53× (sat_Olck)** |
+| preliminary_mul_200k | 0.118 | 0.115 | **3.61× (sat_Olck)** |
 | *o200k (200k ref)* | 0.103 | 0.237 | 13.70× (sat_Olck) |
 
 
@@ -143,10 +143,10 @@ parallel FLORES content, between the worst-served language and English.
 | preliminary_mul | **0.639** | **0.847** | 17 |
 | preliminary_enh | 0.598 | 0.773 | 17 |
 | preliminary_euh | 0.620 | 0.775 | 17 |
-| preliminary_mul_200k | 0.543 | 0.734 | 17 |
+| preliminary_mul_200k | 0.545 | 0.729 | 17 |
 | *o200k (200k ref)* | 0.475 | 0.590 | 255 |
 
-The 200k candidate's lower utilization (0.543 / 0.734) is the vocabulary-size
+The 200k candidate's lower utilization (0.545 / 0.729) is the vocabulary-size
 effect described above, not waste: it uses more tokens in absolute terms.
 o200k has 255 decorative-run/glitch tokens, against 17 for each candidate.
 
@@ -162,7 +162,7 @@ fraction of arithmetic operators emitted as standalone tokens.
 | preliminary_mul | **0.689** | **0.991** |
 | preliminary_enh | 0.679 | 0.990 |
 | preliminary_euh | 0.682 | 0.990 |
-| preliminary_mul_200k | 0.680 | 0.990 |
+| preliminary_mul_200k | 0.681 | 0.990 |
 | *o200k (200k ref)* | 0.463 | 0.354 |
 
 All four candidates align to code structure much better than Apertus v1 and
@@ -195,14 +195,16 @@ runs exist for the chosen candidate.
   drops to 0.917, **below Apertus v1's 1.108 (−17%)**. By Gini it is the least
   fair of the four candidates. Appropriate if European compression is the
   priority and Chinese can be deprioritized.
-- **`preliminary_mul_200k`**: with 53% more vocabulary it compresses English about
-  as much as the others (4.508) and compresses EU (4.050), Indic, the FLORES sets,
-  and the worst-language factor (3.53×) more. It compresses both the high-resource
-  and low-resource languages well, which the 131k candidates do not. The cost is
-  the larger embedding/output table and the departure from Apertus v1's 131k.
-  Against the size-matched o200k it compresses English about 6% less, is roughly
-  2× fairer across 205 languages, compresses the low-resource tail 2.5 to 3.7×
-  more, and has 17 junk tokens vs 255.
+- **`preliminary_mul_200k`** (now the frde_kr120 data scheme): with 53% more
+  vocabulary it compresses English about as much as the others (4.510) and has the
+  highest EU compression (EU-avg 4.129, French 4.295, German 4.363) and the best
+  worst-language factor (3.61×), while keeping the tail (Indic 2.759, Mandarin
+  1.149, Tibetan 2.518). It compresses both the high-resource and low-resource
+  languages well, which the 131k candidates do not. The cost is the larger
+  embedding/output table and the departure from Apertus v1's 131k. Against the
+  size-matched o200k it compresses English about 6% less, is roughly 2× fairer
+  across 205 languages, compresses the low-resource tail far more, and has 17 junk
+  tokens vs 255.
 
 Notes: FineWeb2-proportional is a 7.5 MB sample (seed 0; all tokenizers on the
 identical sample), so its Apertus value (3.077) differs slightly from earlier
