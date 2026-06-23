@@ -113,12 +113,16 @@ low-resource tail much more than Apertus v1 (Tibetan 2.2 to 2.9 vs 0.433).
 Per-language compression across the tokenizers is plotted in
 [per_language_compression.svg](per_language_compression.svg) (PNG:
 [per_language_compression.png](per_language_compression.png)): one panel per
-tokenizer, with bars for 12 languages from the European head to the low-resource
-tail. It uses FLORES sentences per token (parallel sentences, so comparable
-across scripts; the chars/token table above is not). Apertus v1 and o200k
-compress European text well but fragment the low-resource tail: Tibetan is 0.003
-and 0.005 sentences per token, against about 0.020 for the candidates.
-`preliminary_mul_200k` is the most even across the set.
+tokenizer, with bars for 15 languages from the European head to the low-resource
+tail, spanning Latin, Cyrillic, Arabic, CJK, Indic, Thai, Tibetan, and the
+Turkish/Swahili Latin pair. It uses FLORES sentences per token (parallel
+sentences, so comparable across scripts; the chars/token table above is not).
+Apertus v1 and o200k compress European text well but fragment the low-resource
+tail: Tibetan is 0.003 and 0.005 sentences per token, against about 0.020 for
+the candidates. `preliminary_mul_200k` is the most even across the set.
+
+Both plots are produced by `make_per_language_plots.py` from the FLORES
+parallel files (997 sentences per language, `add_special_tokens=False`).
 
 ## 2. Fairness: Gini coefficient and worst-language factor
 
@@ -149,6 +153,18 @@ parallel FLORES content, between the worst-served language and English.
 The 200k candidate's lower utilization (0.545 / 0.729) is the vocabulary-size
 effect described above, not waste: it uses more tokens in absolute terms.
 o200k has 255 decorative-run/glitch tokens, against 17 for each candidate.
+
+Per-language vocabulary utilization (the raw count of distinct vocabulary ids
+used to encode each language's 997-sentence FLORES corpus, not a fraction) is
+plotted in
+[per_language_vocab_utilization.svg](per_language_vocab_utilization.svg) (PNG:
+[per_language_vocab_utilization.png](per_language_vocab_utilization.png)), one
+panel per tokenizer over the same 15 languages as the compression plot. On the
+low-resource tail the candidates use more distinct ids than Apertus v1, which
+means dedicated subword tokens rather than byte fallback: Tibetan 525 to 1300
+across the candidates against 230 for Apertus v1, and Tamil 853 to 1697 against
+771. `preliminary_mul_200k` uses the most distinct ids on Arabic (6077) and
+Hindi (2394) of the candidates, from its larger vocabulary.
 
 ## 4. Code-structure metrics
 
