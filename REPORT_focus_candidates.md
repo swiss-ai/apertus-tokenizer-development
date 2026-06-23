@@ -11,52 +11,54 @@ The four candidates and their data character:
 
 | Candidate | vocab | character | source variant |
 |---|---|---|---|
-| `preliminary_mul` | 131072 | balanced multilingual (consv2 + reparam) | `consv2_reparam` plus3 |
-| `preliminary_enh` | 131072 | English-preserving (English-boosted, moderate EU) | `engfull_eu3` |
-| `preliminary_euh` | 131072 | EU-dense, Fr/De-boosted (Chinese cut) | `frde2` |
-| `preliminary_mul_200k` | **200000** | 200k all-rounder, Fr/De-strong (head + tail, no 131k trade-off) | `eusino_v2c_frde_kr120` |
+| `preliminary_mul_200k` **(recommended)** | **200000** | highest European and highest overall compression; compresses both high-resource and low-resource languages more than the 131k tokenizers | `eusino_v2c_frde_kr120` |
+| `preliminary_mul` | 131072 | most balanced and fairest; highest compression on Indic languages, Chinese, and the low-resource tail | `consv2_reparam` |
+| `preliminary_enh` | 131072 | highest English compression of the 131k tokenizers | `engfull_eu3` |
+| `preliminary_euh` | 131072 | highest European compression of the 131k tokenizers; compresses Chinese less | `frde2` |
 
 ## Primary recommendation
 
-I recommend **`preliminary_euh`** as the primary candidate, given Apertus's
-focus on Switzerland and the EU. It is the EU-dense option. French and German
-compress more than in Apertus v1 (French 4.200, German 4.332 chars/token), and
-the European set overall is denser (EU-avg 3.937 vs 3.785), at Apertus's own
-131k vocabulary size. It allocates more vocabulary to Switzerland's national
-languages (German, French, Italian) and the broader EU.
+I recommend **`preliminary_mul_200k`** as the primary candidate. It compresses
+both the high-resource European languages and the low-resource tail more than the
+131k candidates, which each gain on one and lose on the other. It has the highest
+European compression of the set (EU average 4.245 bytes/token on FLORES, against
+3.865 for Apertus v1, +9.8%), the highest FLORES sentences-per-token (0.0239),
+and the smallest worst-language penalty: the worst-served language needs 3.61x as
+many tokens as English on the same text, against 14.70x for Apertus v1. English
+compression is close to the other candidates (FineWeb-Edu 4.510 bytes/token,
+1.8% below Apertus v1). German compresses more than under Apertus v1 and French
+is about the same.
 
-The cost is deliberate. Sino-Tibetan gets less vocabulary, so `preliminary_euh`
-compresses Mandarin worse than Apertus v1 (−17%). By Gini it is the least fair
-of the four candidates (0.138 / 0.122 on FLORES60 / FLORES200), though still
-fairer than Apertus. It is the recommended default when European coverage is the
-priority and Chinese can reasonably be deprioritized.
+The cost is the vocabulary size. At 200000 it is 53% larger than the 131072 of
+Apertus v1 and the other three candidates, which enlarges the embedding and
+output tables by the same proportion, with the parameter count and memory that
+implies. A larger vocabulary raises compression across the board, so the numbers
+above are not a like-for-like comparison with the 131k candidates; the
+size-matched comparison is OpenAI's o200k (also 200000). Against o200k it
+compresses English about 6% less but compresses the low-resource tail far more
+(Tibetan 0.0178 vs 0.0048 sentences per token), is roughly 2x fairer across 205
+languages, and has 17 junk tokens against 255. Its lower vocabulary-utilization
+figures are the same size effect (more slots, so a smaller used fraction), not a
+defect. It has the same template processing and special tokens as the other three
+candidates.
 
-The other three are stronger on their own axes:
+If a 131k vocabulary is required (to match Apertus v1's embedding table), the
+three 131k candidates each lead on one axis:
 
+- **`preliminary_euh`** has the highest European compression at 131k (EU average
+  3.937 bytes/token, +4.0% vs Apertus v1; German 4.332 vs 4.238 chars/token). It
+  compresses Chinese 17% less than Apertus v1 (Mandarin 0.917 vs 1.108) and is
+  the least fair of the four (Gini 0.138 / 0.122 on FLORES60 / FLORES200, still
+  fairer than Apertus v1). The fit when European compression is the priority and
+  Chinese can be deprioritized.
 - **`preliminary_mul`** is the fairest of the four (Gini 0.088 / 0.105) and most
-  balanced: best Indic (2.776), Mandarin (1.329), and low-resource-tail
-  compression of the 131k set. The better fit when broad multilingual fairness,
-  rather than European density, is the goal.
+  balanced: the highest compression on Indic languages (chars/token 2.776),
+  Chinese (1.329), and the low-resource tail of the 131k candidates. The fit when
+  broad multilingual fairness, rather than European compression, is the goal.
 - **`preliminary_enh`** compresses English the most of the 131k candidates
-  (FineWeb-Edu 4.486 b/t, −2.4% vs Apertus) and keeps most of the multilingual
-  and fairness gains. The better fit when English compression is the priority. It
-  allocates less vocabulary to EU languages, which compress worse than in
-  Apertus v1.
-- **`preliminary_mul_200k`** (frde_kr120 data scheme) compresses both the
-  high-resource and low-resource languages well, which the 131k candidates do
-  not. It has the highest EU and FLORES compression and the best worst-language
-  factor (3.61×), with English about as dense as the others. This requires a 200k
-  vocabulary. The better fit if the larger embedding/output table (and the
-  departure from Apertus's 131k) is acceptable.
-
-**`preliminary_mul_200k` is a 200k-vocabulary tokenizer, a 53% step up from the
-131k of the other three (and of Apertus v1).** A larger vocabulary gives higher
-compression across the board, so its higher numbers than the 131k candidates are
-not a like-for-like comparison. The size-matched comparison for it is OpenAI's
-o200k, also 200k. Its higher compression than the 131k candidates comes from the
-larger vocabulary, not a different data scheme. Its lower vocabulary-utilization
-figures have the same cause (more slots, so a smaller used fraction), and are not
-a defect.
+  (FineWeb-Edu 4.486 bytes/token, 2.4% below Apertus v1) and keeps most of the
+  multilingual and fairness gains. European languages compress less than under
+  Apertus v1. The fit when English compression is the priority.
 
 No language model has been trained on any of these four tokenizers yet, so the
 extrinsic section (§6) is pending for all of them.
@@ -89,9 +91,10 @@ candidate has the highest FLORES numbers. o200k (same vocabulary size)
 compresses English more (4.786) and the full 205-language set much less (0.0176
 vs 0.0208), so the larger vocabulary alone does not give multilingual breadth. On
 the EU set, `preliminary_euh` (+4.6%) and `preliminary_mul_200k` (+9.8%)
-compress more than Apertus v1; `euh` is the densest 131k tokenizer on EU.
+compress more than Apertus v1; `euh` has the highest EU compression of the 131k
+tokenizers.
 
-### 1.1 Language character: FLORES chars/token (content-only; higher = denser; % diff vs Apertus v1)
+### 1.1 Language character: FLORES chars/token (content-only; higher = more characters per token, i.e. higher compression rate; % diff vs Apertus v1)
 
 This shows how each tokenizer allocates vocabulary across languages.
 
@@ -224,33 +227,30 @@ runs exist for the chosen candidate.
 
 ## Takeaways
 
-- **`preliminary_mul`** (consv2 with the reparam adjustment): the balanced
-  multilingual choice and the fairest candidate (Gini 0.088 / 0.105). Best Indic
-  (2.776), Mandarin (1.329), and Tibetan (2.941) of the 131k set, and highest
-  vocabulary utilization (0.847 on FLORES200). It compresses English the least
-  (4.333 b/t, 5.7% below Apertus). Compared to the plain consv2 base it raises EU
-  compression (EU-avg 3.596 to 3.676, FLORES EU 3.693 to 3.780 b/t) with the same
-  Indic/Mandarin/Tibetan, at a small cost to full-205 fairness (Gini 0.097 to
-  0.105) and junk tokens (13 to 17).
-- **`preliminary_enh`**: English focus. Best English compression of the 131k
-  candidates (4.486 b/t, −2.4% vs Apertus), keeping most of the multilingual and
-  fairness gains. Indic and Chinese are lower than `preliminary_mul`. EU languages
-  compress less than under Apertus v1.
-- **`preliminary_euh`**: EU-dense at 131k. Best EU of the 131k candidates (3.937;
-  French and German much improved). Chinese gets less vocabulary, so Mandarin
-  drops to 0.917, **below Apertus v1's 1.108 (−17%)**. By Gini it is the least
-  fair of the four candidates. Appropriate if European compression is the
-  priority and Chinese can be deprioritized.
-- **`preliminary_mul_200k`** (now the frde_kr120 data scheme): with 53% more
-  vocabulary it compresses English about as much as the others (4.510) and has the
-  highest EU compression (EU-avg 4.129, French 4.295, German 4.363) and the best
-  worst-language factor (3.61×), while keeping the tail (Indic 2.759, Mandarin
-  1.149, Tibetan 2.518). It compresses both the high-resource and low-resource
-  languages well, which the 131k candidates do not. The cost is the larger
-  embedding/output table and the departure from Apertus v1's 131k. Against the
-  size-matched o200k it compresses English about 6% less, is roughly 2× fairer
-  across 205 languages, compresses the low-resource tail far more, and has 17 junk
-  tokens vs 255.
+- **`preliminary_mul_200k`** (recommended): with 53% more vocabulary it
+  compresses English about as much as the others (FineWeb-Edu 4.510 bytes/token)
+  and has the highest EU compression (EU-avg 4.129, German 4.363, French 4.295
+  chars/token) and the smallest worst-language penalty (3.61x), while keeping the
+  low-resource tail (Indic 2.759, Mandarin 1.149, Tibetan 2.518 chars/token). It
+  compresses both the high-resource and low-resource languages more than the 131k
+  candidates do. The cost is the larger embedding/output table (200000 vs 131072).
+  Against the size-matched o200k it compresses English about 6% less, is roughly
+  2x fairer across 205 languages, compresses the low-resource tail far more, and
+  has 17 junk tokens against 255.
+- **`preliminary_mul`** (131k): the balanced multilingual choice and the fairest
+  candidate (Gini 0.088 / 0.105). Highest compression on Indic (2.776), Mandarin
+  (1.329), and Tibetan (2.941) of the 131k set, and highest vocabulary
+  utilization (0.847 on FLORES200). It compresses English the least (4.333
+  bytes/token, 5.7% below Apertus v1).
+- **`preliminary_enh`** (131k): English focus. Highest English compression of the
+  131k candidates (4.486 bytes/token, 2.4% below Apertus v1), keeping most of the
+  multilingual and fairness gains. Indic and Chinese are lower than
+  `preliminary_mul`. EU languages compress less than under Apertus v1.
+- **`preliminary_euh`** (131k): highest EU compression of the 131k candidates
+  (EU-avg 3.937; German and French much improved). Chinese gets less vocabulary,
+  so Mandarin drops to 0.917, **below Apertus v1's 1.108 (−17%)**. By Gini it is
+  the least fair of the four candidates. Appropriate if European compression is
+  the priority and Chinese can be deprioritized.
 
 Notes: FineWeb2-proportional is a 7.5 MB sample (seed 0; all tokenizers on the
 identical sample), so its Apertus value (3.077) differs slightly from earlier
