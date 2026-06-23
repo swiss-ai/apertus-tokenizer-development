@@ -59,7 +59,7 @@ figures have the same cause (more slots, so a smaller used fraction), and are no
 a defect.
 
 No language model has been trained on any of these four tokenizers yet, so the
-extrinsic section (§5) is pending for all of them.
+extrinsic section (§6) is pending for all of them.
 
 Compression cells in §1 show `(% diff vs Apertus v1)`. Higher sent/tok and
 higher bytes/token are better.
@@ -185,7 +185,37 @@ All four candidates align to code structure much better than Apertus v1 and
 o200k. Apertus v1 and o200k merge operators into surrounding tokens (operator
 isolation 0.35 to 0.37) and align to AST boundaries less often.
 
-## 5. Extrinsic: 1B-parameter LM
+## 5. Encode throughput
+
+Single-core encode throughput on the English FineWeb-Edu snippet (the same
+1000-document snippet as the compression table in §1), measured through the
+Hugging Face `tokenizers` Rust backend (`encode_batch`,
+`add_special_tokens=False`, `RAYON_NUM_THREADS=1`), reported as the minimum over
+11 timed repeats after warmup. Throughput is input bytes divided by encode time,
+with MB = 10^6 bytes of input UTF-8 text. Numbers are single-core on a shared
+login node, so absolute values carry roughly 10% run-to-run variance; the
+relative ordering is stable. All five tokenizers use `ignore_merges=True`.
+Produced by `fineweb_edu_throughput.py`.
+
+| Tokenizer | Vocab | Encode MB/s |
+|---|---|---|
+| Apertus v1 | 131072 | 3.42 |
+| preliminary_mul | 131072 | 3.04 |
+| preliminary_enh | 131072 | 3.08 |
+| preliminary_euh | 131072 | 2.97 |
+| preliminary_mul_200k | 200000 | 3.07 |
+
+The four candidates were changed to `ignore_merges=True` (they previously shipped
+with it off, like the rest of the training-library default; Apertus v1 already
+had it on). On the candidates this raised single-core encode throughput by 1.11x
+to 1.13x and produced identical token ids on both the English snippet (1000
+documents) and a 10-language FLORES sample (9970 lines), so it changed encode
+speed only, not tokenization. The candidates encode at 2.97 to 3.08 MB/s; the
+remaining difference from Apertus v1 (3.42) is the pretokenizer regex, which does
+more work per byte than the Apertus v1 pretokenizer. The 200k vocabulary does not
+lower throughput here: `preliminary_mul_200k` matches the 131k candidates.
+
+## 6. Extrinsic: 1B-parameter LM
 
 Pending. No language model has been trained on any of the four candidates yet,
 so downstream BPB, BLiMP, MGSM, MC-math, GSM8K, HumanEval, and MBPP are not
