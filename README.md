@@ -28,7 +28,7 @@ Each folder contains `tokenizer.json`, `tokenizer_config.json`, and `special_tok
 ## Common to all
 
 - Byte-level BPE, NFC normalizer.
-- 124 special tokens at IDs 0-123: `<unk>`(0), `<s>`(1), `</s>`(2), `<pad>`(3); the chat tokens `<|system_start|>` … `<|assistant_end|>`, `<|inner_prefix|>`/`<|inner_suffix|>`, `<|tools_prefix|>`/`<|tools_suffix|>`, `<|tool_output_start|>`/`<|tool_output_end|>`, `<|image|>`, `<|audio|>`; `<reflection>`/`</reflection>`; `<think>`/`</think>`; the PII tokens `<pii-iban>`(24), `<pii-email>`(25), `<pii-ip>`(26); and 97 reserve slots `<SPECIAL_27>` … `<SPECIAL_123>`.
+- 124 special tokens at IDs 0-123: `<unk>`(0), `<s>`(1), `</s>`(2), `<pad>`(3); the chat tokens `<|system_start|>` … `<|assistant_end|>`, `<|inner_prefix|>`/`<|inner_suffix|>`, `<|tools_prefix|>`/`<|tools_suffix|>`, `<|tool_output_start|>`/`<|tool_output_end|>`, `<|image|>`, `<|audio|>`; `<reflection>`/`</reflection>`; `<think>`/`</think>`; the PII tokens `<iban-pii>`(24), `<email-pii>`(25), `<ip-pii>`(26); and 97 reserve slots `<SPECIAL_27>` … `<SPECIAL_123>`.
 - `bos_token = <s>`, `eos_token = </s>`, `pad_token = <pad>`, `unk_token = <unk>`.
 - No `chat_template` yet, so `apply_chat_template` is not available.
 
