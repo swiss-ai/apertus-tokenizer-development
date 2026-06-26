@@ -39,7 +39,7 @@ mkdir -p $DATASET_OUTPUT_FOLDER_NAME
 ln -sfn $DATASET_OUTPUT_FOLDER_NAME $PATH_TO_PREPROCESSING_METADATA/tokenized-dir-link
 
 # Create dumps
-sbatch --wait --environment=./env.toml $RES_OPT --partition=$PARTITION --account=$ACCOUNT --job-name=dumps_prep --wrap="python3 prepare_dumps.py --dataset-folder '${PATH_TO_RAW_DATASET}' --preprocessing-metadata-folder '${PATH_TO_PREPROCESSING_METADATA}' --n-dumps '${DUMPS_NUMBER}'"
+srun --environment=./env.toml $RES_OPT --partition=$PARTITION --account=$ACCOUNT --job-name=dumps_prep --export=ALL bash -lc "python3 prepare_dumps.py --dataset-folder '${PATH_TO_RAW_DATASET}' --preprocessing-metadata-folder '${PATH_TO_PREPROCESSING_METADATA}' --n-dumps '${DUMPS_NUMBER}'"
 
 echo "slurm_job_id,node,start,end,paths_file,output_folder,dataset_total_size,processed_total_size,number_of_workers_per_node,time,bw,total_tokens_processed,throughput (Million Tokens/Second/Node)" >$CSV_RESULTS_FILE
 # Iterate through all dumps paths files
