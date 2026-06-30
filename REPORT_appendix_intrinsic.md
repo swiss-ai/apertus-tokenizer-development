@@ -39,7 +39,7 @@ Every column of the candidate and reference intrinsic tables, per FLORES set. Th
 | OLMo 2 | 100,278 | 22 | 4.732 | 0.0114 | 0.277 | 0.7487 | **5.26** | 0.353 | **0.00000** | 0.05851 | 0.577 | 0.211 |
 | K2 Think | 151,665 | 22 | 4.623 | 0.0136 | 0.314 | 0.6222 | 3.50 | 0.320 | 0.00043 | 0.06152 | 0.577 | 0.219 |
 
-### core — high-resource core (FLORES dev split, 997 sent/lang) (31 languages, 14761 parallel sentences/tokenizer)
+### core — high-resource core (FLORES dev split, 997 sent/lang) (13 languages, 12961 parallel sentences/tokenizer)
 
 **Candidates:**
 
