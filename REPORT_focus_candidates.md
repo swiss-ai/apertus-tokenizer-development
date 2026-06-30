@@ -158,6 +158,11 @@ The 200k candidate's lower utilization (0.545 / 0.729) is the vocabulary-size
 effect described above, not waste: it uses more tokens in absolute terms.
 o200k has 255 decorative-run/glitch tokens, against 17 for each candidate.
 
+Utilization here is the raw fraction of vocabulary ids used (used / vocab size).
+The main REPORT.md decision table excludes special and reserved tokens from the
+denominator, so its Apertus v1 figure (0.561) sits slightly above the 0.556 shown
+here; the candidate figures, with far fewer special tokens, agree to within 0.001.
+
 Per-language vocabulary utilization (the raw count of distinct vocabulary ids
 used to encode each language's 997-sentence FLORES corpus, not a fraction) is
 plotted in
