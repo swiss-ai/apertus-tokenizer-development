@@ -4,3 +4,7 @@ REPORT_METADATA.md
 FEEDBACK.md
 apertus_team_pitch_deck.md
 SHORTCOMINGS.md
+
+# Per-language plots are tracked as PNG only; the SVG copies stay local (regenerable
+# from make_per_language_plots.py). This does not affect the tracked report_*/ SVGs.
+per_language_*.svg
