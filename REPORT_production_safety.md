@@ -72,7 +72,7 @@ These are Brahmic/Indic and other scripts with many canonically-decomposable seq
 
 ## Vocabulary usage — Active / Rare / Uncommon / Unseen, and Scaffold
 
-How each merge-created vocabulary token is actually used, from encoding a fixed corpus: **FLORES-200 (211 langs) + FineMath-4+ + StarCoder (python+javascript)**. For a merge token *t* (the base byte-alphabet is excluded), with `final(t)` = times emitted as a standalone token and `stepping(t)` = times built as an internal step inside a longer emitted token, define `formed(t) = final(t) + stepping(t)` and two corpus-invariant rates:
+How each merge-created vocabulary token is actually used, from encoding a fixed corpus: **FLORES dev (211 languages) + FineMath-4+ + StarCoder (python+javascript)**. For a merge token *t* (the base byte-alphabet is excluded), with `final(t)` = times emitted as a standalone token and `stepping(t)` = times built as an internal step inside a longer emitted token, define `formed(t) = final(t) + stepping(t)` and two corpus-invariant rates:
 - `standalone_rate(t) = final(t) / Σ_t final(t)` &nbsp;&nbsp; `survival(t) = final(t) / formed(t)`
 
 Every merge token (byte-fragments included) is classified by the **same** rule (no special-casing). Four buckets partition the merge vocabulary by standalone rate (sum to 100%):
