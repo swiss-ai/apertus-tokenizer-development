@@ -116,8 +116,7 @@ the only 131k candidate that compresses more than Apertus v1 on the EU average
 low-resource tail much more than Apertus v1 (Tibetan 2.2 to 2.9 vs 0.433).
 
 Per-language compression across the tokenizers is plotted in
-[per_language_compression.svg](per_language_compression.svg) (PNG:
-[per_language_compression.png](per_language_compression.png)): one panel per
+[per_language_compression.png](per_language_compression.png): one panel per
 tokenizer, with bars for 15 languages from the European head to the low-resource
 tail, spanning Latin, Cyrillic, Arabic, CJK, Indic, Thai, Tibetan, and the
 Turkish/Swahili Latin pair. It uses FLORES sentences per token (parallel
@@ -162,8 +161,7 @@ o200k has 255 decorative-run/glitch tokens, against 17 for each candidate.
 Per-language vocabulary utilization (the raw count of distinct vocabulary ids
 used to encode each language's 997-sentence FLORES corpus, not a fraction) is
 plotted in
-[per_language_vocab_utilization.svg](per_language_vocab_utilization.svg) (PNG:
-[per_language_vocab_utilization.png](per_language_vocab_utilization.png)), one
+[per_language_vocab_utilization.png](per_language_vocab_utilization.png), one
 panel per tokenizer over the same 15 languages as the compression plot. On the
 low-resource tail the candidates use more distinct ids than Apertus v1, which
 means dedicated subword tokens rather than byte fallback: Tibetan 525 to 1300
