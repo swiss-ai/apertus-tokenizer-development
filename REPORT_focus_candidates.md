@@ -91,7 +91,7 @@ and compress English a few percent less. Among the 131k candidates,
 `preliminary_enh` has the smallest English loss (−2.4% vs Apertus). The 200k
 candidate has the highest FLORES numbers. o200k (same vocabulary size)
 compresses English more (4.786) and the full 205-language set much less (0.0176
-vs 0.0208), so the larger vocabulary alone does not give multilingual breadth. On
+vs 0.0207), so the larger vocabulary alone does not give multilingual breadth. On
 the EU set, `preliminary_euh` (+4.6%) and `preliminary_mul_200k` (+9.8%)
 compress more than Apertus v1; `euh` has the highest EU compression of the 131k
 tokenizers.
