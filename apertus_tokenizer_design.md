@@ -388,7 +388,7 @@ which the lineage is still being iterated.
 ### Clean-multi family — concrete stage-1 patterns
 
 The patterns below are taken verbatim from the shipped `clean-multi` (capped) tokenizers used by the
-report's candidates (`PA-Clean-capped`, `SuperBPE-clean-fw2full-hw`). They are the concrete form of the
+report's candidates (CleanV1-pretok + PA-BPE, `SuperBPE-clean-fw2full-hw`). They are the concrete form of the
 decisions above: case-splitting on, single-digit `\p{N}`, no trailing-char fusion, `\p{M}` in the word
 arms, the space-only word prefix `[ ]?` (apostrophes and punctuation do not attach forward), and
 `{1,16}` caps on punctuation/whitespace runs. The targeted extensions (`plus`, `plus2`, `plus3`) are
@@ -529,7 +529,7 @@ with no regressions.
 
 Per-language downstream numbers (PA hyb+win, `_tuned` config) are pending: the `_tuned` plus3 runs
 (SLURM 2462027 / 2462028) are in flight at time of writing. The report's roster includes
-`PA-Clean-plus3-cap-hw-cv2` and `PA-Clean-plus3-cap-cv2`, which use the `consv2` parity data-weighting
+CleanV3-pretok + PA-BPE (rebalanced data) and CleanV3-pretok + PA-BPE (base parity, rebalanced data), which use the `consv2` parity data-weighting
 config and are therefore not directly comparable to `plus` / `plus2` on the per-language axis
 (`consv2` shifts family weights independent of the pretokenizer).
 
@@ -548,8 +548,8 @@ The selection within the clean-multi family is not finalized. Four axes remain o
   primes. Downstream LM training for the `_tuned` `plus3` runs is the next signal expected.
 - **Parity-config.** Independent of the regex choice, the data-side parity config is itself under
   review (`tuned` vs `consv2` vs `modv2`; documented in `~/pa_tokenizers_branch/TOKENIZER_TRAINING.md`).
-  Headline intrinsics differ noticeably between configs at fixed pretokenizer: in `results/REPORT.md`,
-  `PA-Clean-plus3-cap-hw-cv2` and `PA-Clean-plus3-cap-cv2` (same `plus3` regex, same `consv2`,
+  Headline intrinsics differ noticeably between configs at fixed pretokenizer: in `REPORT.md`,
+  CleanV3-pretok + PA-BPE (rebalanced data) and CleanV3-pretok + PA-BPE (base parity, rebalanced data) (same `plus3` regex, same `consv2`,
   differing only on hybrid-window vs base) have meanTPS 0.0233 vs 0.0217 and Gini 0.087 vs 0.095.
 - **Hybrid-window vs base parity.** Orthogonal to the regex choice. The base-parity `plus3-cv2`
   variant scores higher AST alignment (0.728 vs 0.688) but loses multilingual compression. Selection
@@ -599,13 +599,13 @@ The candidate roster covers four training algorithms, all run on byte-level toke
   - **`tuned`** (v5; `~/pa_tokenizers_branch/TOKENIZER_TRAINING.md §9`) — hand-tuned. European
     family ratios ×1.2; two data-quality failures (`kas_Deva`, `lij_Latn`) dropped; script-mismatched
     languages (`ydd_Hebr`, three Arabic-script entries) regrouped into `semitic`. Used by
-    `PA-Clean-capped`, `PA-Clean-plus2-capped`, and the other `_tuned` candidates in the report.
+    CleanV1-pretok + PA-BPE, `PA-Clean-plus2-capped`, and the other `_tuned` candidates in the report.
   - **`consv2`** and **`modv2`** (v6; `~/pa_tokenizers_branch/VOCAB_FILTERING_PLAN.md §8`) — replace
     hand-tuning with a principled formula
     `ratio = 1.0 + (baseline − 1.0) · max(f_data, f_speakers)` over per-family data volume
     (FineWeb2 GB) and speaker count. `consv2` (D_REF=10 GB, S_REF=50 M, taikadai_cap=2.0) changes
     three families; `modv2` (D_REF=50 GB, S_REF=200 M, taikadai_cap=1.75) changes eight. The
-    report's `PA-Clean-plus3-cap-hw-cv2` and `PA-Clean-plus3-cap-cv2` rows are trained under
+    report's CleanV3-pretok + PA-BPE (rebalanced data) and CleanV3-pretok + PA-BPE (base parity, rebalanced data) rows are trained under
     `consv2`.
 
   Selection between `tuned`, `consv2`, and `modv2` is one of the open axes in
@@ -690,6 +690,8 @@ For training data decontamination:
 | 36 | `<iban-pii>` |
 | 37 | `<email-pii>` |
 | 38 | `<ip-pii>` |
+
+In the deployed v2 tokenizers these PII tokens are placed at IDs 24 to 26 (the 124-token spec compacts the used tokens into the low IDs).
 
 #### File & Code Translation (IDs 39–41)
 
