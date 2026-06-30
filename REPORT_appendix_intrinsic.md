@@ -107,9 +107,3 @@ Small multiples, one panel per language.
 ![broad: compression_rate_faceted.svg](report_flores60/faceted_plots/compression_rate_faceted.svg)
 
 ![broad: vocabulary_utilization_faceted.svg](report_flores60/faceted_plots/vocabulary_utilization_faceted.svg)
-
-**core** — compression & vocabulary utilization:
-
-![core: compression_rate_faceted.svg](report_core/faceted_plots/compression_rate_faceted.svg)
-
-![core: vocabulary_utilization_faceted.svg](report_core/faceted_plots/vocabulary_utilization_faceted.svg)
