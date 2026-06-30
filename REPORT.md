@@ -220,6 +220,9 @@ In every preset the math and code groups are heuristically fixed at `ratio` 1.0,
 - **clean-multi** *(current direction)* — apertus word arms but a **space-only word prefix** (apostrophes/punctuation don't attach forward: `don't` → `don | ' | t`) and **no trailing-char fusion**, with a matching reduced SuperBPE stage-2 (words removed, single digits and single punctuation kept isolated).
 - **right-aligned digits** — digits grouped right-to-left (Singh & Strouse 2024).
 - **capped (suffix on any family)** — punctuation/symbol and whitespace runs bounded to `{1,16}`, so BPE can't build long decorative-junk tokens; byte-identical on normal text/code/math.
+- **claude**: reverse-engineered Claude regex; a space-only word prefix (punctuation does not attach forward) and per-type whitespace splitting, sharing CamelCase and `\p{N}{1,3}` with gpt4o. Appears only in balanced ablation rows.
+- **punctuation**: HuggingFace `Punctuation(Isolated)` plus GPT-2 byte-level; punctuation isolated, otherwise GPT-2-style.
+- **whitespace**: `WhitespaceSplit` plus byte-level; split only on whitespace, minimal structure.
 
 **Reference matrix** — all tokenizers in one table (columns map to the dimensions above):
 
