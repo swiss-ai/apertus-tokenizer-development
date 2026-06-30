@@ -11,7 +11,7 @@ The four candidates and their data character:
 
 | Candidate | vocab | character | source variant |
 |---|---|---|---|
-| `preliminary_mul_200k` **(recommended)** | **200000** | highest European and highest overall compression; compresses both high-resource and low-resource languages more than the 131k tokenizers | `eusino_v2c_frde_kr120` |
+| `preliminary_mul_200k` **(recommended)** | **200064** | highest European and highest overall compression; compresses both high-resource and low-resource languages more than the 131k tokenizers | `eusino_v2c_frde_kr120` |
 | `preliminary_mul` | 131072 | most balanced and fairest; highest compression on Indic languages, Chinese, and the low-resource tail | `consv2_reparam` |
 | `preliminary_enh` | 131072 | highest English compression of the 131k tokenizers | `engfull_eu3` |
 | `preliminary_euh` | 131072 | highest European compression of the 131k tokenizers; compresses Chinese less | `frde2` |
@@ -29,7 +29,7 @@ compression is close to the other candidates (FineWeb-Edu 4.510 bytes/token,
 1.8% below Apertus v1). German compresses more than under Apertus v1 and French
 is about the same.
 
-The cost is the vocabulary size. At 200000 it is 53% larger than the 131072 of
+The cost is the vocabulary size. At 200064 it is 53% larger than the 131072 of
 Apertus v1 and the other three candidates, which enlarges the embedding and
 output tables by the same proportion, with the parameter count and memory that
 implies. A larger vocabulary raises compression across the board, so the numbers
@@ -244,7 +244,7 @@ Produced by `fineweb_edu_throughput.py`.
 | preliminary_mul | 131072 | 3.04 |
 | preliminary_enh | 131072 | 3.08 |
 | preliminary_euh | 131072 | 2.97 |
-| preliminary_mul_200k | 200000 | 3.07 |
+| preliminary_mul_200k | 200064 | 3.07 |
 
 The four candidates were changed to `ignore_merges=True` (they previously shipped
 with it off, like the rest of the training-library default; Apertus v1 already
@@ -330,7 +330,7 @@ numbers.
   chars/token) and the smallest worst-language penalty (3.61x), while keeping the
   low-resource tail (Indic 2.759, Mandarin 1.149, Tibetan 2.518 chars/token). It
   compresses both the high-resource and low-resource languages more than the 131k
-  candidates do. The cost is the larger embedding/output table (200000 vs 131072).
+  candidates do. The cost is the larger embedding/output table (200064 vs 131072).
   Against the size-matched o200k it compresses English about 6% less, is roughly
   2x fairer across 205 languages, compresses the low-resource tail far more, and
   has 17 junk tokens against 255.

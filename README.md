@@ -4,7 +4,7 @@ Preliminary Apertus v2 tokenizers and their Hugging Face config files.
 
 Intrinsic comparison of the four candidates: [REPORT_focus_candidates.md](REPORT_focus_candidates.md).
 
-**Recommended candidate: `preliminary_mul_200k`** (200000 vocabulary). It has the highest European compression and the highest overall compression of the tokenizers here, and the smallest worst-language penalty. It compresses both high-resource European languages and low-resource languages more than the 131k tokenizers, which each improve one and worsen the other. The cost is a 53% larger embedding and output table than the 131072-vocabulary options (Apertus v1 and the other three candidates). Use one of the 131k candidates instead if you need to match Apertus v1's vocabulary size.
+**Recommended candidate: `preliminary_mul_200k`** (200064 vocabulary, 128-aligned). It has the highest European compression and the highest overall compression of the tokenizers here, and the smallest worst-language penalty. It compresses both high-resource European languages and low-resource languages more than the 131k tokenizers, which each improve one and worsen the other. The cost is a 53% larger embedding and output table than the 131072-vocabulary options (Apertus v1 and the other three candidates). Use one of the 131k candidates instead if you need to match Apertus v1's vocabulary size.
 
 > **Warning: template processing differs from Apertus v1.** With `add_special_tokens=True`, the post-processor wraps a single sequence as `<s> text </s>`, adding both BOS and EOS. Apertus v1 prepends only `<s>` and adds no `</s>`. This is a deliberate change requested by the engineering team. Configure training, packing, and any chat template accordingly. See the "Default encode behavior and caveats" section below.
 
@@ -12,7 +12,7 @@ Intrinsic comparison of the four candidates: [REPORT_focus_candidates.md](REPORT
 
 | folder | vocab | post-processor | character |
 |---|---|---|---|
-| `preliminary_mul_200k/` | 200000 | yes (`<s> … </s>`) | **Recommended.** Highest European compression of the tokenizers here (European average 4.245 bytes/token on FLORES, against 3.865 for Apertus v1) and the smallest worst-language penalty: the worst-served language needs 3.61x as many tokens as English, against 14.70x for Apertus v1. English compression is close to Apertus v1 (FineWeb-Edu 4.510 bytes/token, 1.8% lower). Compresses both high-resource and low-resource languages more than the 131k tokenizers. |
+| `preliminary_mul_200k/` | 200064 | yes (`<s> … </s>`) | **Recommended.** Highest European compression of the tokenizers here (European average 4.245 bytes/token on FLORES, against 3.865 for Apertus v1) and the smallest worst-language penalty: the worst-served language needs 3.61x as many tokens as English, against 14.70x for Apertus v1. English compression is close to Apertus v1 (FineWeb-Edu 4.510 bytes/token, 1.8% lower). Compresses both high-resource and low-resource languages more than the 131k tokenizers. |
 | `preliminary_mul/` | 131072 | yes | **Most balanced and fairest, 131k.** Lowest unfairness (Gini 0.088 on FLORES60) of the four. Highest compression on Indic languages, Chinese, and the low-resource tail among the 131k tokenizers. Compresses English the least (FineWeb-Edu 4.333 bytes/token, 5.7% below Apertus v1). |
 | `preliminary_enh/` | 131072 | yes | **Highest English compression at 131k.** FineWeb-Edu 4.486 bytes/token, 2.4% below Apertus v1, trained with more English data, while keeping most of the multilingual and fairness gains. European languages compress a little less than under Apertus v1. |
 | `preliminary_euh/` | 131072 | yes | **Highest European compression at 131k.** Trained with more French and German data and less Chinese data. German and French compress more than under Apertus v1, but Chinese compresses 17% less (Mandarin 0.917 vs 1.108 chars/token), and it is the least fair of the four. |
@@ -21,7 +21,7 @@ Build recipes (variant keys in `train_tokenizer.py`):
 - `preliminary_enh`: `nfc_clean_multi_plus2_repcap8_capped_hybrid_window_tuned_consv2_engfull_eu3_gm110k_v131k_sp124_eng5g` + BOS/EOS post-processor
 - `preliminary_euh`: `nfc_clean_multi_plus2_repcap8_capped_hybrid_window_tuned_consv2_frde2_gm110k_v131k_sp124_eng5g` + BOS/EOS post-processor
 - `preliminary_mul`: `nfc_clean_multi_plus3_repcap8_capped_hybrid_window_tuned_consv2_reparam_v131k_sp124_eng5g` + BOS/EOS post-processor
-- `preliminary_mul_200k`: `nfc_clean_multi_plus2_repcap8_capped_hybrid_window_tuned_consv2_eusino_v2c_frde_kr120_gm130k_v200k_sp124_eng5g` + BOS/EOS post-processor
+- `preliminary_mul_200k`: `nfc_clean_multi_plus2_repcap8_capped_hybrid_window_tuned_consv2_eusino_v2c_frde_kr120_gm130k_v200064_sp124_eng5g` + BOS/EOS post-processor (vocab 200064, 128-aligned; IDs 0-199999 identical to the prior 200000 build)
 
 Each folder contains `tokenizer.json`, `tokenizer_config.json`, and `special_tokens_map.json`. The same files are on the Hub at `cmeister/apertus_v2_tokenizer` under matching subfolders.
 
@@ -36,7 +36,7 @@ Each folder contains `tokenizer.json`, `tokenizer_config.json`, and `special_tok
 
 | | `preliminary_enh` | `preliminary_euh` | `preliminary_mul` | `preliminary_mul_200k` |
 |---|---|---|---|---|
-| vocabulary size | 131072 | 131072 | 131072 | 200000 |
+| vocabulary size | 131072 | 131072 | 131072 | 200064 |
 | pre-tokenizer | `clean_multi_plus2_repcap8` | `clean_multi_plus2_repcap8` | `clean_multi_plus3_repcap8` | `clean_multi_plus2_repcap8` |
 | post-processor | `<s> $A </s>` | `<s> $A </s>` | `<s> $A </s>` | `<s> $A </s>` |
 | data character | more English data | more French/German data, less Chinese | balanced multilingual | balanced multilingual, larger vocabulary |
