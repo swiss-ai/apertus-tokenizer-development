@@ -34,7 +34,7 @@ Apertus v1 and the other three candidates, which enlarges the embedding and
 output tables by the same proportion, with the parameter count and memory that
 implies. A larger vocabulary raises compression across the board, so the numbers
 above are not a like-for-like comparison with the 131k candidates; the
-size-matched comparison is OpenAI's o200k (also 200000). Against o200k it
+size-matched comparison is OpenAI's o200k (200000, against this build's 200064). Against o200k it
 compresses English about 6% less but compresses the low-resource tail far more
 (Tibetan 0.0178 vs 0.0048 sentences per token), is roughly 2x fairer across 205
 languages, and has 17 junk tokens against 255. Its lower vocabulary-utilization
@@ -176,7 +176,7 @@ Hindi (2394) of the candidates, from its larger vocabulary.
 
 ### 3.1 Vocabulary-usage breakdown and scaffold tokens
 
-Each merge-created token is run over a fixed corpus (FLORES-200, FineMath-4+, and
+Each merge-created token is run over a fixed corpus (FLORES dev, FineMath-4+, and
 StarCoder python+javascript) and placed by how often it is emitted on its own.
 The four buckets partition the merge vocabulary (they sum to 100%, excluding the
 124 special tokens): Active (standalone rate at or above 5 per million), Rare
@@ -283,7 +283,7 @@ therefore serves as a proxy for the 200k candidate's downstream behavior.
 
 Protocol: nanochat GPT, depth-24 (~1B parameters), muP. Two training regimes per
 tokenizer: a standard multilingual mix to about 9B tokens, and a from-scratch 20B
-math+code mix (`mathcode-scratch`). Evaluations: FLORES-200 bits-per-byte over 214
+math+code mix (`mathcode-scratch`). Evaluations: downstream LM FLORES BPB over 214
 languages (BPB is normalized per byte, so it compares across tokenizers), BLiMP,
 Belebele (31 languages), MGSM, GSM8K, HumanEval (0-shot), MBPP (3-shot), and
 MC-math (k=5, 500 examples per dataset). One seed per tokenizer.
@@ -293,7 +293,7 @@ Standard-1B:
 | Metric | `preliminary_enh` | `preliminary_euh` |
 |---|---|---|
 | Validation BPB ↓ | 0.7253 | 0.7253 |
-| FLORES-200 mean BPB ↓ | 2.982 | 2.979 |
+| LM FLORES BPB (214 lang) ↓ | 2.982 | 2.979 |
 | BLiMP acc ↑ | 0.820 | 0.820 |
 | Belebele acc ↑ | 0.240 | 0.256 |
 | MGSM flexible ↑ | 0.0160 | 0.0109 |
@@ -306,14 +306,14 @@ Mathcode-scratch (20B math+code):
 | Metric | `preliminary_enh` | `preliminary_euh` |
 |---|---|---|
 | Validation BPB ↓ | 0.3423 | 0.3433 |
-| FLORES-200 mean BPB ↓ | 3.555 | 3.537 |
+| LM FLORES BPB (214 lang) ↓ | 3.555 | 3.537 |
 | HumanEval pass@1 ↑ | 0.079 | 0.116 |
 | MBPP pass@1 ↑ | 0.154 | 0.102 |
 | GSM8K strict (limit 500) ↑ | 0.228 | 0.224 |
 | MC-math gsm8k / math / pythonio ↑ | 0.274 / 0.284 / 0.260 | 0.258 / 0.302 / 0.276 |
 
 `preliminary_enh` and `preliminary_euh` are close on the metrics tied to general
-modeling: identical validation BPB (0.7253), FLORES-200 BPB 2.982 vs 2.979, and
+modeling: identical validation BPB (0.7253), LM FLORES BPB 2.982 vs 2.979, and
 BLiMP 0.820 for both. `preliminary_euh` is higher on Belebele (0.256 vs 0.240).
 The math and code numbers are small, single-seed, and computed on at most 500
 examples, with wide confidence intervals, and they do not point one way:
