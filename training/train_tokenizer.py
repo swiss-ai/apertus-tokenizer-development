@@ -1,20 +1,14 @@
 #!/usr/bin/env python3
-"""Train one of 6 tokenizer variants for the 30-language PA-BPE experiment.
+"""Train the Apertus 2 candidate tokenizers.
 
-Variants:
-  bpe_baseline     - standard BpeTrainer
-  pa_bpe_dev       - ParityBpeTrainer base variant, dev-driven
-  pa_bpe_hybrid    - ParityBpeTrainer base, global_merges=64000 (hybrid)
-  pa_bpe_window    - ParityBpeTrainer window variant (W=100, alpha=2)
-  pa_bpe_ratios    - ParityBpeTrainer base, FLORES bytes/line ratios (no dev)
-  pa_bpe_dev_gpt4o - ParityBpeTrainer base + GPT-4o regex pretokenizer
-
-All variants share the same 5 GiB training corpus, 150 MiB/lang floor,
-mT5-proportional sampling, and a fixed special-tokens list.
+Each production variant reads a parity-aware config under `configs/`, builds the
+corpus with `pa_bpe_iterators.py`, trains with the parity-aware BPE trainer, and
+writes a `tokenizer.json` (no post-processor; BOS/EOS are added for deployment).
+The shipped variant keys are listed in TRAINING.md (Per-tokenizer recipes).
 
 Usage:
-  train_tokenizer.py --variant <name>          # full run
-  train_tokenizer.py --variant <name> --smoke-test   # tiny corpus + vocab
+  train_tokenizer.py --variant <KEY>          # full run
+  train_tokenizer.py --variant <KEY> --smoke-test   # tiny corpus + vocab
 """
 import argparse
 import hashlib
@@ -63,15 +57,14 @@ VOCAB_SIZE = 128_000
 MIN_FREQUENCY = 2
 SPECIAL_TOKENS = ["<unk>", "<s>", "</s>", "<pad>"]
 
-# Apertus 99-token special spec (IDs 0-98). Sourced from
-# configs/apertus_special_tokens.json which mirrors the team Google sheet.
+# Apertus 124-token special spec (IDs 0-123), from apertus_special_tokens.json.
 # When a variant sets `special_tokens_override` to this list, the trainer
-# pre-adds these 99 tokens so they occupy IDs 0-98 in the final vocab.
+# pre-adds these 124 tokens so they occupy IDs 0-123 in the final vocab.
 def _load_apertus_specials():
     import json as _json
-    p = REPO_ROOT / "configs" / "apertus_special_tokens.json"
+    p = REPO_ROOT / "apertus_special_tokens.json"
     if not p.exists():
-        return None
+        raise FileNotFoundError(f"special-tokens spec not found: {p}")
     d = _json.loads(p.read_text(encoding="utf-8"))
     return d["tokens"]
 APERTUS_SPECIAL_TOKENS = _load_apertus_specials()
