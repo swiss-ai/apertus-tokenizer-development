@@ -8,7 +8,7 @@ Disclaimer: Claude helped compile this report from all of my analyses. All numbe
 
 ## Contents
 
-- [Recommendation](#recommendation)
+- [Scope](#scope)
 - [Metric guide](#metric-guide)
 - [Candidate comparison](#candidate-comparison)
   - [Candidates and references across FLORES sets](#candidates-and-references-across-flores-sets)
@@ -21,12 +21,10 @@ Disclaimer: Claude helped compile this report from all of my analyses. All numbe
 - [Appendix — extrinsic (downstream LM) details](#appendix--extrinsic-downstream-lm-details)
 - [Related documents](#related-documents)
 
-## Recommendation
+## Scope
 
-I recommend **preliminary_mul_200k** (previously CleanV2-pretok + PA-BPE, at 200k vocabulary) as the headline tokenizer. The four current candidates are the clean PA-BPE family carried forward: `preliminary_mul` is CleanV3-pretok + PA-BPE (rebalanced); `preliminary_enh`, `preliminary_euh`, and `preliminary_mul_200k` are CleanV2-pretok + PA-BPE with English-boosted, Fr/De-boosted, and 200k variants.
-Against the production Apertus v1 tokenizer, on the broad FLORES set `preliminary_mul_200k` compresses more (sent/tok 0.0239 against 0.0198) and is fairer across languages (Gini, the inequality of per-language encoding cost, 0.118 against 0.205; lower is fairer); on the FLORES+ devtest set (205 languages) its worst-language factor is the smallest of the set (3.61x against 14.70x, the multiplicative token-count increase between the worst-served language and English). It has the highest European compression of the candidates (FLORES European average 4.245 bytes/token against Apertus's 3.865) while keeping English close to Apertus (FineWeb-Edu 4.51 against 4.60 bytes/token). It aligns to code structure far better (AST boundary alignment 0.681 against 0.488; operator-isolation 0.99 against 0.50).
-The cost is vocabulary size: 200064 against the 131072 of Apertus v1 and the other three candidates, a 53% larger embedding and output table. At 1B parameters this does not cost downstream per-byte fit on the training languages: on the 31 training languages `preliminary_mul_200k` matches Apertus v1 on validation BPB (0.720 against 0.720) and has the lowest trained-FLORES BPB of the candidates and the baseline (1.163, against 1.164 to 1.167 for the 131k candidates and 1.168 for Apertus v1). Downstream comparisons here use only the 31 training languages (trained-FLORES or validation BPB); the downstream LM FLORES BPB set (214 languages) is not used because most of those languages were not in the training data.
-If a 131k vocabulary is required (to match Apertus v1's embedding table), the three 131k candidates each lead on one axis: `preliminary_mul` is the fairest and most balanced, `preliminary_euh` has the highest European compression, and `preliminary_enh` the highest English compression. The detailed four-way comparison, including the intrinsic plots, is in `REPORT_focus_candidates.md` (apertus-tokenizer-development).
+This document is the full cross-tokenizer comparison (candidates, open-source references, and design ablations) and the methodology. The recommendation and the detailed four-way candidate comparison are in [REPORT_focus_candidates.md](REPORT_focus_candidates.md).
+
 Disqualified by a production-safety fail: Gemma 3, EuroLLM (see *Production-safety gates*).
 
 ## Metric guide
@@ -49,7 +47,7 @@ The recommended tokenizers and the current Apertus production baseline, on the d
 | Tokenizer | Role | Multiling. sent/tok ↑ | Gini ↓ | Vocab-util CoV ↓ | Avg langs/token ↑ | Eng B/tok ↑ | Vocab util ↑ | AST align ↑ | Val BPB ↓ | FLORES BPB (trained) [95% CI] ↓ | FLORES BPB σ (trained) ↓ | MC-math ↑ | MBPP ↑ | Gate |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
 | preliminary_mul_200k (CleanV2-pretok + PA-BPE, 200k) | headline (200k) | 0.0239 | 0.118 | 0.5041 | 2.28 | 4.51 | 0.545 | 0.681 | 0.720 | 1.163 [1.057, 1.269] | 0.302 | 0.247 | 0.206 | warn |
-| preliminary_mul (CleanV3-pretok + PA-BPE, rebalanced) | 131k candidate: fairest / most balanced | 0.0235 | 0.088 | 0.4180 | 2.67 | 4.33 | 0.639 | 0.689 | 0.728 | 1.167 [1.061, 1.274] | 0.302 | — | — | warn |
+| preliminary_mul (CleanV3-pretok + PA-BPE, rebalanced) | 131k candidate: fairest / most balanced | 0.0235 | 0.088 | 0.4180 | 2.67 | 4.33 | 0.639 | 0.689 | 0.728 | 1.167 [1.061, 1.274] | 0.302 | 0.285 | 0.170 | warn |
 | preliminary_enh (CleanV2-pretok + PA-BPE, English-boosted) | 131k candidate: highest English compression | 0.0223 | 0.121 | 0.5320 | 2.75 | 4.49 | 0.598 | 0.679 | 0.725 | 1.164 [1.057, 1.271] | 0.304 | 0.273 | 0.154 | warn |
 | preliminary_euh (CleanV2-pretok + PA-BPE, Fr/De-boosted) | 131k candidate: highest European compression | 0.0219 | 0.138 | 0.5852 | 2.68 | 4.42 | 0.621 | 0.682 | 0.725 | 1.167 [1.060, 1.275] | 0.305 | 0.279 | 0.102 | warn |
 | Apertus v1 (production) | comparator (production) | 0.0198 | 0.205 | 0.5133 | 2.86 | 4.60 | 0.561 | 0.488 | 0.720 | 1.168 [1.063, 1.272] | 0.297 | 0.257 | 0.000 [0.000, 0.000] | warn |
@@ -334,7 +332,7 @@ Small transformers trained from scratch on each tokenizer (companion `tokenizer-
 | Unigram-gpt4o [matched] | 0.731 | 1.190 [1.084, 1.297] | 0.303 | 0.554 | 0.833 | 0.911 | 0.015 | — | — | — | — |
 | preliminary_enh (CleanV2-pretok + PA-BPE, English-boosted) [matched] | 0.725 | 1.164 [1.057, 1.271] | 0.304 | 0.529 | 0.820 | 0.911 | 0.016 | 0.273 | 0.242 | 0.079 | 0.154 |
 | preliminary_euh (CleanV2-pretok + PA-BPE, Fr/De-boosted) [matched] | 0.725 | 1.167 [1.060, 1.275] | 0.305 | 0.532 | 0.820 | 0.915 | 0.011 | 0.279 | 0.236 | 0.116 | 0.102 |
-| preliminary_mul (CleanV3-pretok + PA-BPE, rebalanced) [matched] | 0.728 | 1.167 [1.061, 1.274] | 0.302 | 0.531 | 0.814 | 0.919 | 0.014 | — | — | — | — |
+| preliminary_mul (CleanV3-pretok + PA-BPE, rebalanced) [matched] | 0.728 | 1.167 [1.061, 1.274] | 0.302 | 0.531 | 0.814 | 0.919 | 0.014 | 0.285 | 0.240 | 0.024 | 0.170 |
 | preliminary_mul_200k (CleanV2-pretok + PA-BPE, 200k) [matched] | 0.720 | 1.163 [1.057, 1.269] | 0.302 | 0.524 | 0.821 | 0.917 | 0.010 | 0.247 | 0.240 | 0.073 | 0.206 |
 
 **10B vs 20B stability (balanced mixture).** Five tokenizers continued from their 10B checkpoint for +10B on the same data. BPB ↓ better; BLiMP/GSM8K/HumanEval/MBPP/MGSM ↑ better. This is the justification for reporting most runs at 10B: **BPB/code-BPB rankings are budget-stable, generative-task rankings are not** (single runs, no CIs). BLiMP is Option-B (BOS) scoring; the 20B *-continue* runs have no Option-B eval, shown `—`.
