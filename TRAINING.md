@@ -13,7 +13,7 @@ The exact recipe artifacts are bundled under [`training/`](training/): the four 
    ```
    Use `--release`. `pip install -e .` and a plain `maturin develop` build the debug profile, which is unoptimized and about 10x slower at training, with no error or warning. A debug build of the extension is about 115 MB, a release build about 10 MB. See `bindings/python/README.md` in the tokenizers repository.
 2. Set up Python. Use a virtual environment with the release `tokenizers` extension installed (our environment uses `pa_venv`). Put the files from this repository's `training/` directory on that machine.
-3. Point the configs at the datasets. The config files reference our cluster paths (see Data); rewrite the dataset roots to wherever those datasets live in your environment.
+3. Point the configs at the datasets. The config paths use a `${DATA_ROOT}` placeholder (see Data); set it to where these datasets live in your environment.
 4. Train. From the directory holding `train_tokenizer.py`:
    ```bash
    python train_tokenizer.py --variant <KEY>
@@ -62,7 +62,7 @@ The inputs are public datasets, with the multilingual data drawn from a quality-
 - Code: StarCoder.
 - Evaluation only (not training): FLORES-200 devtest.
 
-The config files under `training/configs/` list absolute input paths; rewrite the dataset roots to wherever these datasets live in your environment before training. `preliminary_mul_200k`'s singletons family also lists a roughly 23 MB Korean subsample of the FineWeb-2 data.
+The config files under `training/configs/` reference paths under a `${DATA_ROOT}` placeholder; set it to where these datasets live before training. `preliminary_mul_200k`'s singletons family also lists a roughly 23 MB Korean subsample of the FineWeb-2 data.
 
 ## 6. Per-tokenizer recipes
 

@@ -223,8 +223,7 @@ VARIANTS = {
         "signal": "ratios",
         # Uses the _quota.json sibling (0.70x per-family shrink). The
         # no-quota config materialized 33 GB on disk into ~460 GB resident
-        # and OOM'd in base mode too (SLURM 2256970/2257135), not just
-        # hybrid+window. See TOKENIZER_TRAINING.md sec 6.5 / sec 6.9.
+        # and OOM'd in base mode too, not just hybrid+window.
         "grouped_config": "configs/parity_aware_config_grouped_fineweb2full_quota.json",
         "special_tokens_override": [],
         "decoder_add_prefix_space": True,
@@ -234,7 +233,7 @@ VARIANTS = {
     },
 
     # Same trainer settings as pa_bpe_nfc_gpt4_fineweb2full, but data spec
-    # is derived from /users/cmeister747/tokenizer-lm/configs/data/balanced.json
+    # is derived from a balanced data config
     # (34 groups; ~9.5 GB text budget) and ratios are computed from FLORES+
     # dev bytes-per-line. Used to retry the FineWeb-2 full-sample variant
     # after the original no-quota run OOM'd at 450 GB on the full 33 GB
@@ -254,7 +253,7 @@ VARIANTS = {
     },
 
     # Hybrid+window variants of the two grouped-config runs above, intended
-    # as drop-in replacements consumed by the LM pipeline at ~/tokenizer-lm/.
+    # as drop-in replacements consumed by the downstream LM pipeline.
     # - variant=window + global_merges=64000 mirrors the pa_bpe_hybrid_window
     #   algorithm: 64k language-blind merges first, then 64k parity-window merges.
     # - output_group="tokenizer-lm-toks" redirects the final artifact directly
@@ -273,10 +272,9 @@ VARIANTS = {
         "signal": "ratios",
         # Uses *_quota.json sibling: same 25 family groups and per-group `ratio`
         # as the original grouped FineWeb-2 full-sample config, plus per-family
-        # quota_bytes (uniform 0.70x shrink of on-disk parquet sums; see
-        # TOKENIZER_TRAINING.md sec 6.3) so the hybrid+window run fits in
-        # 450 GB. Quota was added because the original config (no quotas)
-        # OOM'd at 463 GB resident in SLURM 1900564.
+        # quota_bytes (uniform 0.70x shrink of on-disk parquet sums) so the
+        # hybrid+window run fits in 450 GB. Quota was added because the
+        # original config (no quotas) OOM'd at 463 GB resident.
         "grouped_config": "configs/parity_aware_config_grouped_fineweb2full_quota.json",
         "special_tokens_override": [],
         "decoder_add_prefix_space": True,
@@ -347,7 +345,7 @@ VARIANTS = {
         "signal": "ratios",
         # Same quota config used by pa_bpe_nfc_gpt4_fineweb2full_hybrid_window
         # — the 0.70x per-family shrink keeps this hybrid+window run under
-        # the 450 GB SLURM cap (see TOKENIZER_TRAINING.md sec 6.3).
+        # the 450 GB memory cap.
         "grouped_config": "configs/parity_aware_config_grouped_fineweb2full_quota.json",
         "special_tokens_override": [],
         "decoder_add_prefix_space": True,
@@ -376,7 +374,7 @@ VARIANTS = {
     # the parity-aware tokenizer-lm-toks/ variants. NFC + the named pretok
     # regex; full 256-byte alphabet + 4 post-training specials, same as the
     # PA set. fineweb2full uses the _quota.json config (no-quota OOMs
-    # at ~460 GB regardless of trainer — see TOKENIZER_TRAINING.md §6.7).
+    # at ~460 GB regardless of trainer).
     # Output dirs are prefixed `bpe_` to keep them distinct from the PA dirs.
     "bpe_nfc_clean_multi_balanced": {
         "trainer": "bpe",
@@ -533,7 +531,7 @@ VARIANTS = {
     },
 
     # ===== _tuned ablations (2026-05-24), hybrid+window + apertus-capped only =====
-    # Single-variable changes from the _tuned config (RESULTS.md §12 follow-up):
+    # Single-variable changes from the _tuned config:
     #  - _noregroup: keep European x1.2 + quality removals, DROP the regrouping
     #    (ydd_Hebr/kas_Arab/knc_Arab/uzs_Arab stay in their original family groups).
     #  - _x1p1:      keep removals + regrouping, soften European bump x1.2 -> x1.1.
@@ -668,8 +666,7 @@ VARIANTS = {
     },
 
     # targA / targAplus variants: plus3 pretok + targeted ratio dampening on
-    # the chrome-producing families. See VOCAB_FILTERING_PLAN.md v5 and
-    # gen_ratio_variants.py for the data-config rationale.
+    # the chrome-producing families.
     #   targA     : taikadai 3.160 -> 1.500 (only)
     #   targAplus : taikadai 3.160 -> 1.500  AND  dravidian 2.966 -> 2.000
     "pa_bpe_nfc_clean_multi_plus3_capped_tuned_targA": {
@@ -729,8 +726,7 @@ VARIANTS = {
         "post_training_special_tokens": ["<s>", "</s>", "<unk>", "<pad>"],
     },
 
-    # v6 principled reweighting variants. See VOCAB_FILTERING_PLAN.md §8 and
-    # gen_ratio_variants.py. Combines encoding cost × max(f_data, f_speakers)
+    # v6 principled reweighting variants. Combines encoding cost × max(f_data, f_speakers)
     # penalty, with an empirical taikadai cap. No global RATIO_CAP.
     #   consv2: D_REF=10 GB,  S_REF=50 M,  taikadai_cap=2.00
     #   modv2:  D_REF=50 GB,  S_REF=200 M, taikadai_cap=1.75
@@ -1241,8 +1237,8 @@ VARIANTS = {
     # taikadai=Thai/Lao, austroasiatic=Vietnamese/Khmer); Hindi/Bengali/Tamil
     # (indoaryan/dravidian) and isolates preserved at consv2. Escalating
     # romance/germanic to push European toward Apertus v1. plus2 pretok, gm=80k.
-    # Arabic (semitic) floored at the consv2 value. (The plus3/gm90k version,
-    # jobs 2553237-2553239, was cancelled and superseded by this.)
+    # Arabic (semitic) floored at the consv2 value. (The plus3/gm90k version
+    # was cancelled and superseded by this.)
     **{
         f"pa_bpe_nfc_clean_multi_plus2_repcap8_capped_hybrid_window_tuned_consv2_{slug}_gm80k_v131k_sp124_eng5g": {
             "trainer": "parity-bpe",
@@ -1967,8 +1963,8 @@ def train_grouped_variant(args, cfg, out_dir, smoke, quick,
         # under-produces from num_merges. So reserve room for the
         # post_training_special_tokens that get appended after save —
         # otherwise final vocab = vocab_size + n_post overshoots the
-        # `got_vs > vocab_size` guard below (the bug that failed SLURM
-        # 2282607-2282609). Net effect: final tokenizer == vocab_size exactly.
+        # `got_vs > vocab_size` guard below. Net effect: final tokenizer ==
+        # vocab_size exactly.
         n_post = len(cfg.get("post_training_special_tokens") or [])
         bpe_target = vocab_size - n_post
         bpe_kwargs = dict(
