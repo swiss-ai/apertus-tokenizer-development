@@ -272,6 +272,16 @@ In every preset the math and code groups are heuristically fixed at `ratio` 1.0,
 | SuperBPE·clean-cap·base·fw2full | Ablation | SuperBPE | PA-BPE base (clean-capped, base) | clean-multi-capped | NFC | capped | FineWeb2-full (tuned); transition 90k |
 | SuperBPE·gpt4·hw·fw2full | Ablation | SuperBPE | PA-BPE base (gpt4, hw) | gpt4o | NFC | — | FineWeb2-full; transition 90k |
 | SuperBPE·gpt4·base·fw2full | Ablation | SuperBPE | PA-BPE base (gpt4, base) | gpt4o | NFC | — | FineWeb2-full; transition 90k |
+| BPE-Punct | Ablation | Plain BPE | — | punctuation | none | — | balanced |
+| BPE-gpt4o-balanced | Ablation | Plain BPE | — | gpt4o | none | — | balanced |
+| BPE-gpt4o-balanced-NFC | Ablation | Plain BPE | — | gpt4o | NFC | — | balanced |
+| PA-Clean-balanced-hw | Ablation | Parity-aware BPE | hybrid-window | clean-multi | NFC | uncapped | balanced |
+| PA-Clean-plus2-A8 | Ablation | Parity-aware BPE | hybrid-window | clean-multi-plus2 | NFC | capped | FineWeb2-full (tuned consv2 + tailcuts + eng5g); gm90k, vocab 131k |
+| PA-Clean-plus3-A6 | Ablation | Parity-aware BPE | hybrid-window | clean-multi-plus3 | NFC | capped | FineWeb2-full (tuned consv2 + tailcuts + eng5g); gm70k |
+| PA-Clean-plus3-A8 | Ablation | Parity-aware BPE | hybrid-window | clean-multi-plus3 | NFC | capped | FineWeb2-full (tuned consv2 + tailcuts + eng5g); gm90k |
+| PA-Clean-plus3-repcap8fr-A8 | Ablation | Parity-aware BPE | hybrid-window | clean-multi-plus3 + repcap8 (fr = fixed regex) | NFC | capped | FineWeb2-full (tuned consv2 + tailcuts + eng5g); gm90k, vocab 131k |
+| PA-Clean-plus3-repcap8fr-cv2 | Ablation | Parity-aware BPE | hybrid-window | clean-multi-plus3 + repcap8 (fr = fixed regex) | NFC | capped | FineWeb2-full (consv2 baseline: gm64k, no tailcuts; eng5g); vocab 131k |
+| SuperBPE-plus2v2-cv2-t110k | Ablation | SuperBPE | PA-BPE base (clean-multi-plus2 v2, capped, hw) | clean-multi-plus2 (v2) | NFC | capped | FineWeb2-full (consv2); transition 110k, vocab 130k |
 
 ## Appendix — extrinsic (downstream LM) details
 
