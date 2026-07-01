@@ -23,6 +23,8 @@ Build recipes (variant keys in `train_tokenizer.py`):
 - `preliminary_mul`: `nfc_clean_multi_plus3_repcap8_capped_hybrid_window_tuned_consv2_reparam_v131k_sp124_eng5g` + BOS/EOS post-processor
 - `preliminary_mul_200k`: `nfc_clean_multi_plus2_repcap8_capped_hybrid_window_tuned_consv2_eusino_v2c_frde_kr120_gm130k_v200064_sp124_eng5g` + BOS/EOS post-processor (vocab 200064, 128-aligned; IDs 0-199999 identical to the prior 200000 build)
 
+Full training recipes, environment, data, and reproduction steps: [TRAINING.md](TRAINING.md).
+
 Each folder contains `tokenizer.json`, `tokenizer_config.json`, and `special_tokens_map.json`. The same files are on the Hub at `cmeister/apertus_v2_tokenizer` under matching subfolders.
 
 ## Common to all
