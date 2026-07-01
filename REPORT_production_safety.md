@@ -1,4 +1,4 @@
-# Production-safety gates and vocabulary inspection — companion to REPORT.md
+# Production-safety gates and vocabulary inspection (companion to REPORT.md)
 
 *([← back to REPORT.md](REPORT.md))*
 
@@ -32,7 +32,7 @@ A **fail** disqualifies before ranking. Dead vocab (normalizer- or pretokenizer-
 
 > **Unreachable-vocab warning:** Gemma 3, Qwen 3, EuroLLM, K2 Think each have at least one normalizer- or pretokenizer-unreachable vocab token (the *Dead vocab* column). These slots are unreachable but do not affect correctness.
 
-## Round-trip fidelity — where reconstruction differs
+## Round-trip fidelity: where reconstruction differs
 
 Measured on the **full** corpus. *Round-trip* = `decode(encode(text)) == text`. A difference is only a defect if it loses information (an UNK, or a byte that cannot be recovered). Every tokenizer here is byte-level with full 256-byte coverage (the *Byte coverage* gate above), so none can emit UNK or drop bytes. **NFC** normalization, however, deliberately rewrites text to canonical composed form, so for NFC tokenizers `decode(encode(x))` returns the *canonical* form of `x`. The exact-match rate is below 1.0 by reversible re-spelling, not loss (CER stays near zero). Table shows the 7 candidates, the Apertus baseline, and 5 open-source references; all other ablations follow one of these patterns and are omitted.
 | Tokenizer | Exact-match ↑ | Mean CER ↓ |
@@ -70,16 +70,16 @@ In the table above, the tokenizers reach exact-match 1.0 (Apertus v1 (production
 | Taml | 0.9980 | 0.00002 | 1 |
 These are Brahmic/Indic and other scripts with many canonically-decomposable sequences (combining vowel signs, nuktas), where NFC composition changes the code points. CER stays near zero (most differences are single-codepoint canonical swaps) and UNK is zero, so no text is lost. Non-NFC tokenizers (e.g. Apertus, the `noNFC` SuperBPE) round-trip exactly (exact-match 1.0) everywhere.
 
-## Vocabulary usage — Active / Rare / Uncommon / Unseen, and Scaffold
+## Vocabulary usage: Active / Rare / Uncommon / Unseen, and Scaffold
 
 How each merge-created vocabulary token is actually used, from encoding a fixed corpus: **FLORES dev (211 languages) + FineMath-4+ + StarCoder (python+javascript)**. For a merge token *t* (the base byte-alphabet is excluded), with `final(t)` = times emitted as a standalone token and `stepping(t)` = times built as an internal step inside a longer emitted token, define `formed(t) = final(t) + stepping(t)` and two corpus-invariant rates:
 - `standalone_rate(t) = final(t) / Σ_t final(t)` &nbsp;&nbsp; `survival(t) = final(t) / formed(t)`
 
 Every merge token (byte-fragments included) is classified by the **same** rule (no special-casing). Four buckets partition the merge vocabulary by standalone rate (sum to 100%):
-- **Active** — `formed>0` and `standalone_rate ≥ 5/million`: appears on its own a normal amount.
-- **Rare** — `formed>0` and `1/million ≤ standalone_rate < 5/million`: appears on its own, but seldom.
-- **Uncommon** — `formed>0` and `standalone_rate < 1/million`: very seldom appears on its own.
-- **Unseen** — `formed == 0`: never produced in **any** role on this corpus — neither a final token nor a merge step (a defined merge the corpus simply never exercised).
+- **Active**: `formed>0` and `standalone_rate ≥ 5/million`: appears on its own a normal amount.
+- **Rare**: `formed>0` and `1/million ≤ standalone_rate < 5/million`: appears on its own, but seldom.
+- **Uncommon**: `formed>0` and `standalone_rate < 1/million`: very seldom appears on its own.
+- **Unseen**: `formed == 0`: never produced in **any** role on this corpus, neither a final token nor a merge step (a defined merge the corpus simply never exercised).
 
 **Scaffold** is an overlay on Rare ∪ Uncommon (not a separate partition bucket): a token is Scaffold when `standalone_rate < 5/million` **and** `survival < 0.1`: it rarely appears on its own **and** is emitted as a final token < 10% of the times it is built, so it acts mostly as a stepping stone toward longer tokens. Scaffold is **rarely-exercised embedding capacity, not removable waste** (these tokens are structurally required to build the tokens that do surface), and is distinct from the absolute *Dead vocab* (normalizer- or pretokenizer-unreachable) and *Junk* gates.
 
@@ -140,7 +140,7 @@ Thresholds (all corpus-invariant): rate `1` and `5 per million`, survival `0.1`.
 
 *Scaffold examples (byte-fragments), CleanV1-pretok + PA-BPE:* `�`→`।` (built 250725×, final 0×); `�`→`ပ` (built 239058×, final 52×); ` �`→` ह` (built 236822×, final 25×); ` �`→` �` (built 225274×, final 15×); `�`→`པ` (built 195181×, final 12×)
 
-## Appendix — long-token (>64 char) examples
+## Appendix: long-token (>64 char) examples
 
 Examples truncated to 40 chars; entries that look blank are long runs of spaces. These flag decorative-junk tokens (e.g. `----`, `====`, space runs) vs legitimate long multibyte-script words.
 
@@ -159,9 +159,9 @@ Examples truncated to 40 chars; entries that look blank are long runs of spaces.
 ### Junk-token examples
 
 These are low-value vocab tokens that waste slots, in three categories (each token is counted once, in priority order punctuation, then web, then gibberish; examples truncated to 40 chars):
-- **Punctuation** — runs of ≥8 punctuation/symbol/whitespace chars with no letters or digits (the *Junk toks* gate: decorative separators / whitespace runs).
-- **Web/markup** — URL / HTML scrape residue: `://`, `www.…`, `.tld/path`, HTML entities (`&nbsp;`), self-closing/attributed tags (`/>`, `<a href=`, `class="…`). Strong markers only; bare `http`, `https`, `www`, `.com` and special/sentinel tokens (`<bos>`, `</s>`) are **not** flagged.
-- **Gibberish** — hash / random-alphanumeric IDs: ASCII, ≥12 chars, a long hex run or many letter↔digit transitions (normal identifiers like `utf8`, `base64encoded`, `covid19` are **not** flagged).
+- **Punctuation**: runs of ≥8 punctuation/symbol/whitespace chars with no letters or digits (the *Junk toks* gate: decorative separators / whitespace runs).
+- **Web/markup**: URL / HTML scrape residue: `://`, `www.…`, `.tld/path`, HTML entities (`&nbsp;`), self-closing/attributed tags (`/>`, `<a href=`, `class="…`). Strong markers only; bare `http`, `https`, `www`, `.com` and special/sentinel tokens (`<bos>`, `</s>`) are **not** flagged.
+- **Gibberish**: hash / random-alphanumeric IDs: ASCII, ≥12 chars, a long hex run or many letter↔digit transitions (normal identifiers like `utf8`, `base64encoded`, `covid19` are **not** flagged).
 
 
 **Punctuation runs:**

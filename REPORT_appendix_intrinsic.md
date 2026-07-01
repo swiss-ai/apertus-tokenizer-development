@@ -1,18 +1,18 @@
-# Appendix: full intrinsic tables — companion to REPORT.md
+# Appendix: full intrinsic tables (companion to REPORT.md)
 
 *([← back to REPORT.md](REPORT.md))*
 
 Full per-tokenizer × per-language intrinsic tables across the three FLORES evaluation sets (broad 60-language, core 13-language, full 205-language devtest), followed by per-language compression and vocabulary-utilization plots.
 
 
-## Appendix — full intrinsic tables (all FLORES sets)
+## Appendix: full intrinsic tables (all FLORES sets)
 
 Every column of the candidate and reference intrinsic tables, per FLORES set. The body's *Candidates and references across FLORES sets* summarises the corpus-dependent metrics; these are the complete tables.
 
 
-### broad — multilingual set across resource levels (FLORES dev split, 997 sent/lang) (60 languages, 59820 parallel sentences/tokenizer)
+### broad: multilingual set across resource levels (FLORES dev split, 997 sent/lang) (60 languages, 59820 parallel sentences/tokenizer)
 
-**Candidates** (Val/FLORES BPB are downstream-LM extrinsic metrics; `pending`/`—` where not yet run; see the ablations and the extrinsic appendix):
+**Candidates** (Val/FLORES BPB are downstream-LM extrinsic metrics; `pending`/`-` where not yet run; see the ablations and the extrinsic appendix):
 
 | Tokenizer | Vocab size | Special toks | Eng comp (B/tok) ↑ | Multiling. sent/tok ↑ | Vocab util ↑ | Vocab-util CoV ↓ | Avg langs/token ↑ | Gini ↓ | CER ↓ | Boundary-cross ↓ | Operator-isol ↑ | Enc ms/seq ↓ | Val BPB ↓ | FLORES BPB (tr.) ↓ |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
@@ -20,7 +20,7 @@ Every column of the candidate and reference intrinsic tables, per FLORES set. Th
 | CleanV1-pretok + PA-BPE | 127,835 | 4 | 4.238 | 0.0232 | 0.605 | 0.4138 | 2.79 | **0.081** | 0.00043 | **0.02198** | **0.987** | 0.110 | **0.729** | 1.169 |
 | CleanV2-pretok + PA-BPE | 127,835 | 4 | 4.260 | **0.0233** | 0.607 | 0.4132 | 2.79 | **0.081** | 0.00043 | 0.02200 | **0.987** | 0.107 | **0.729** | 1.171 |
 | CleanV3-pretok + PA-BPE (rebalanced data) | 127,835 | 4 | 4.261 | **0.0233** | **0.625** | 0.4212 | 2.74 | 0.087 | 0.00043 | 0.02699 | **0.987** | **0.064** | **0.729** | 1.170 |
-| CleanV3-pretok + PA-BPE (base parity, rebalanced data) | 127,835 | 4 | 3.177 | 0.0217 | 0.559 | 0.4352 | 2.79 | 0.095 | 0.00043 | 0.02810 | 0.986 | 0.067 | — | — |
+| CleanV3-pretok + PA-BPE (base parity, rebalanced data) | 127,835 | 4 | 3.177 | 0.0217 | 0.559 | 0.4352 | 2.79 | 0.095 | 0.00043 | 0.02810 | 0.986 | 0.067 | - | - |
 | Apertus-pretok + PA-BPE + SuperBPE | 128,000 | 0 | **5.402** | 0.0230 | 0.544 | 0.4992 | **3.14** | 0.110 | 0.00043 | 0.02686 | 0.466 | 0.079 | 0.733 | 1.176 |
 | CleanV1-pretok + PA-BPE + SuperBPE | 128,000 | 0 | 5.013 | 0.0227 | 0.550 | 0.4892 | 3.02 | 0.106 | 0.00043 | 0.02629 | **0.987** | 0.071 | 0.732 | **1.161** |
 
@@ -39,7 +39,7 @@ Every column of the candidate and reference intrinsic tables, per FLORES set. Th
 | OLMo 2 | 100,278 | 22 | 4.732 | 0.0114 | 0.277 | 0.7487 | **5.26** | 0.353 | **0.00000** | 0.05851 | 0.577 | 0.211 |
 | K2 Think | 151,665 | 22 | 4.623 | 0.0136 | 0.314 | 0.6222 | 3.50 | 0.320 | 0.00043 | 0.06152 | 0.577 | 0.219 |
 
-### core — high-resource core (FLORES dev split, 997 sent/lang) (13 languages, 12961 parallel sentences/tokenizer)
+### core: high-resource core (FLORES dev split, 997 sent/lang) (13 languages, 12961 parallel sentences/tokenizer)
 
 **Candidates:**
 
@@ -68,7 +68,7 @@ Every column of the candidate and reference intrinsic tables, per FLORES set. Th
 | OLMo 2 | 100,278 | 22 | 4.732 | 0.0183 | 0.206 | 0.7117 | **1.94** | 0.215 | **0.00000** | 0.05032 | 0.527 | 0.139 |
 | K2 Think | 151,665 | 22 | 4.623 | 0.0223 | 0.228 | 0.4279 | 1.53 | 0.181 | 0.00015 | 0.05127 | 0.527 | 0.083 |
 
-### full — all available FLORES+ languages (devtest split, 1012 sent/lang) (205 languages, 207459 parallel sentences/tokenizer)
+### full: all available FLORES+ languages (devtest split, 1012 sent/lang) (205 languages, 207459 parallel sentences/tokenizer)
 
 **Candidates:**
 
@@ -97,12 +97,12 @@ Every column of the candidate and reference intrinsic tables, per FLORES set. Th
 | OLMo 2 | 100,278 | 22 | 4.732 | 0.0109 | 0.342 | 0.6505 | **14.61** | 0.339 | **0.00000** | 0.04732 | **0.508** | 0.231 |
 | K2 Think | 151,665 | 22 | 4.623 | 0.0131 | 0.373 | 0.5518 | 9.55 | 0.280 | 0.00133 | 0.05114 | **0.508** | 0.166 |
 
-## Appendix — per-language plots (compression & vocabulary utilization)
+## Appendix: per-language plots (compression & vocabulary utilization)
 
 Small multiples, one panel per language.
 
 
-**broad** — compression & vocabulary utilization:
+**broad**: compression & vocabulary utilization:
 
 ![broad: compression_rate_faceted.svg](report_flores60/faceted_plots/compression_rate_faceted.svg)
 
