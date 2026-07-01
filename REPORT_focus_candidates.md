@@ -188,7 +188,7 @@ token in fewer than 10% of the times they are built, so they act mostly as a
 merge step toward tokens that do surface. Scaffold counts rarely-exercised
 embedding capacity that is structurally needed to build the tokens that do
 surface; it is not removable waste (distinct from the junk and dead-vocabulary
-metrics). Produced by `nonemitting_tokens.py`.
+metrics).
 
 | Tokenizer | Merge tokens | Active % | Rare % | Uncommon % | Unseen % | Scaffold % | Scaffold count |
 |---|---|---|---|---|---|---|---|
@@ -240,7 +240,6 @@ Hugging Face `tokenizers` Rust backend (`encode_batch`,
 with MB = 10^6 bytes of input UTF-8 text. Numbers are single-core on a shared
 login node, so absolute values carry roughly 10% run-to-run variance; the
 relative ordering is stable. All five tokenizers use `ignore_merges=True`.
-Produced by `fineweb_edu_throughput.py`.
 
 | Tokenizer | Vocab | Encode MB/s |
 |---|---|---|
