@@ -6,12 +6,12 @@ The exact recipe artifacts are bundled under [`training/`](training/): the four 
 
 ## 1. Reproduce
 
-1. Build the trainer. Clone the tokenizers fork `github.com/Ahmetcanyvz/tokenizers` at commit `9847f56e` (branch `parity-aware-bpe`) and build the Python extension in release mode:
+1. Build the trainer. The parity-aware BPE trainer is implemented in Hugging Face `tokenizers` PR #1974 (https://github.com/huggingface/tokenizers/pull/1974). Check out that PR's branch and build the Python extension in release mode:
    ```bash
    cd bindings/python
    maturin develop --release
    ```
-   Use `--release`. `pip install -e .` and a plain `maturin develop` build the debug profile, which is unoptimized and about 10x slower at training, with no error or warning. A debug build of the extension is about 115 MB, a release build about 10 MB. See `bindings/python/README.md` in the fork.
+   Use `--release`. `pip install -e .` and a plain `maturin develop` build the debug profile, which is unoptimized and about 10x slower at training, with no error or warning. A debug build of the extension is about 115 MB, a release build about 10 MB. See `bindings/python/README.md` in the tokenizers repository.
 2. Set up Python. Use a virtual environment with the release `tokenizers` extension installed (our environment uses `pa_venv`). Put the files from this repository's `training/` directory on that machine.
 3. Point the configs at the datasets. The config files reference our cluster paths (see Data); rewrite the dataset roots to wherever those datasets live in your environment.
 4. Train. From the directory holding `train_tokenizer.py`:
@@ -26,7 +26,7 @@ We ran each variant as one SLURM job: `sbatch --wrap "python train_tokenizer.py 
 
 ## 2. Trainer
 
-The trainer is `ParityBpeTrainer` in the tokenizers fork (`tokenizers/src/models/bpe/parity_trainer.rs`, `github.com/Ahmetcanyvz/tokenizers @ 9847f56e`). It is a byte-level BPE trainer with a hybrid global-then-parity merge schedule:
+The trainer is `ParityBpeTrainer` (in `src/models/bpe/`), implemented in Hugging Face `tokenizers` PR #1974 (https://github.com/huggingface/tokenizers/pull/1974). It is a byte-level BPE trainer with a hybrid global-then-parity merge schedule:
 
 - `window_size=100`, `alpha=2.0`, `total_symbols=True`.
 - Global phase: the first `gm` (`global_merges`) merges are chosen by data-weighted pooled frequency across all languages.
@@ -54,23 +54,15 @@ So `add_special_tokens=True` wraps a single sequence as `<s> ... </s>`.
 
 Each config groups languages into families and reads `quota_bytes` of text per family. The loader `training/pa_bpe_iterators.py` (`ListedFileCorpus`) fills a family's quota round-robin with an equal per-file byte cap, so within a family a language's file count is roughly its share of the data.
 
-The config input paths are our cluster's copies of public datasets:
+The inputs are public datasets, with the multilingual data drawn from a quality-filtered variant of FineWeb-2 (`HuggingFaceFW/fineweb-2`):
 
-| family / use | dataset | our cluster root |
-|---|---|---|
-| English | FineWeb v1 sample (HF dataset; verify exact id before publishing) | `.../downstream_lm_training_data/fineweb_sample/CC-MAIN-*` |
-| European and other boosted families | FineWeb-2 v0.1, filtered with our `quality_10` plus robots filtering. This filtered variant is our preprocessing of FineWeb-2, not a standard public release. | `.../infra01/.../fineweb-2_0_1-quality_10-filterrobots` |
-| baseline per-language families | FineWeb-2 sample, one file per language (HF dataset; verify exact id before publishing) | `.../downstream_lm_training_data/fineweb2_sample` |
-| code | StarCoder (HF dataset; verify exact id before publishing) | `.../downstream_lm_training_data/starcoder_sample` |
-| evaluation only (not training) | FLORES-200 devtest (HF dataset; verify exact id before publishing) | n/a |
+- English: a FineWeb English web sample.
+- European and other boosted families: a quality-filtered version of FineWeb-2 (`HuggingFaceFW/fineweb-2`), using our own quality and robots filtering. This filtered variant is our preprocessing, not a standard public release; it is not distributed here, so these families cannot be reproduced byte-for-byte without it.
+- Baseline per-language families: a per-language sample of FineWeb-2 (`HuggingFaceFW/fineweb-2`).
+- Code: StarCoder.
+- Evaluation only (not training): FLORES-200 devtest.
 
-To reproduce, rewrite these roots to your paths, for example:
-
-```bash
-sed -i "s#/capstor/store/cscs/swissai/a139/datasets/tokenizer_training/downstream_lm_training_data#${DATA_ROOT}#g" training/configs/*.json
-```
-
-`preliminary_mul_200k`'s singletons family also lists `kor_Hang_cap23mb.parquet`, a roughly 23 MB subsample of the Korean FineWeb-2 data.
+The config files under `training/configs/` list absolute input paths; rewrite the dataset roots to wherever these datasets live in your environment before training. `preliminary_mul_200k`'s singletons family also lists a roughly 23 MB Korean subsample of the FineWeb-2 data.
 
 ## 6. Per-tokenizer recipes
 

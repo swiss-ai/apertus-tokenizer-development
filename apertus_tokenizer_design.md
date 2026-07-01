@@ -547,7 +547,7 @@ The selection within the clean-multi family is not finalized. Four axes remain o
   French/Italian/Catalan elision gap; `plus3` targets Maltese morphemes, English dialect, and math
   primes. Downstream LM training for the `_tuned` `plus3` runs is the next signal expected.
 - **Parity-config.** Independent of the regex choice, the data-side parity config is itself under
-  review (`tuned` vs `consv2` vs `modv2`; documented in `~/pa_tokenizers_branch/TOKENIZER_TRAINING.md`).
+  review (`tuned` vs `consv2` vs `modv2`).
   Headline intrinsics differ noticeably between configs at fixed pretokenizer: in `REPORT.md`,
   CleanV3-pretok + PA-BPE (rebalanced data) and CleanV3-pretok + PA-BPE (base parity, rebalanced data) (same `plus3` regex, same `consv2`,
   differing only on hybrid-window vs base) have meanTPS 0.0233 vs 0.0217 and Gini 0.087 vs 0.095.
@@ -561,9 +561,9 @@ The selection within the clean-multi family is not finalized. Four axes remain o
 
 ## Training data
 
-The current candidate tokenizers (PA-BPE and SuperBPE) train on a single corpus mixture defined in
-`~/pa_tokenizers_branch/configs/parity_aware_config_grouped_fineweb2full_quota_tuned.json` (and the
-sibling v6 variants discussed under [Algorithms](#algorithms)). Twenty-five input groups:
+The current candidate tokenizers (PA-BPE and SuperBPE) train on a single corpus mixture defined by a
+grouped FineWeb-2 quota config (the `tuned` base and the sibling v6 variants discussed under
+[Algorithms](#algorithms)). Twenty-five input groups:
 
 - **22 multilingual family groups** (austroasiatic, austronesian, baltic, berber, celtic, cushitic,
   dravidian, germanic, indoaryan, iranian, isolates_and_singletons, mande, nigercongo_bantu,
@@ -574,10 +574,8 @@ sibling v6 variants discussed under [Algorithms](#algorithms)). Twenty-five inpu
 - **Math** — InfiMath + FineMath samples.
 
 Per-family data volume is governed by a `quota_bytes` budget in the config. Two languages were
-dropped after a data-quality audit (`~/pa_tokenizers_branch/RESULTS.md §11.2`): `kas_Deva`
-(Devanagari-Kashmiri, script purity 0.59) and `lij_Latn` (Ligurian, 68% duplicate lines). Full
-provenance, group composition, and the quota mechanics are in
-`~/pa_tokenizers_branch/TOKENIZER_TRAINING.md §6` and `§9`. The per-family `ratio` weights that bias
+dropped after a data-quality audit: `kas_Deva`
+(Devanagari-Kashmiri, script purity 0.59) and `lij_Latn` (Ligurian, 68% duplicate lines). The per-family `ratio` weights that bias
 the PA-BPE trainer's merge selection are a separate design axis, discussed under
 [Algorithms](#algorithms).
 
@@ -586,7 +584,7 @@ the PA-BPE trainer's merge selection are a separate design axis, discussed under
 The candidate roster covers four training algorithms, all run on byte-level token streams:
 
 - **Plain BPE.** Hugging Face `tokenizers` `BpeTrainer`. Baseline reference; not a candidate.
-- **Parity-aware BPE.** A custom `ParityBpeTrainer` (in `~/pa_tokenizers_branch`) that biases merge
+- **Parity-aware BPE.** A custom `ParityBpeTrainer` (Hugging Face `tokenizers` PR #1974) that biases merge
   selection by per-group encoding cost, so low-resource languages receive proportionally more merges
   than under plain BPE. Two operating modes:
   - **base** — pure parity-driven merging from the start.
@@ -596,11 +594,11 @@ The candidate roster covers four training algorithms, all run on byte-level toke
 
   The per-family `ratio` values that bias merge selection are themselves a design axis. Three
   configs are under consideration:
-  - **`tuned`** (v5; `~/pa_tokenizers_branch/TOKENIZER_TRAINING.md §9`) — hand-tuned. European
+  - **`tuned`** (v5) — hand-tuned. European
     family ratios ×1.2; two data-quality failures (`kas_Deva`, `lij_Latn`) dropped; script-mismatched
     languages (`ydd_Hebr`, three Arabic-script entries) regrouped into `semitic`. Used by
     CleanV1-pretok + PA-BPE, `PA-Clean-plus2-capped`, and the other `_tuned` candidates in the report.
-  - **`consv2`** and **`modv2`** (v6; `~/pa_tokenizers_branch/VOCAB_FILTERING_PLAN.md §8`) — replace
+  - **`consv2`** and **`modv2`** (v6) — replace
     hand-tuning with a principled formula
     `ratio = 1.0 + (baseline − 1.0) · max(f_data, f_speakers)` over per-family data volume
     (FineWeb2 GB) and speaker count. `consv2` (D_REF=10 GB, S_REF=50 M, taikadai_cap=2.0) changes
@@ -613,8 +611,7 @@ The candidate roster covers four training algorithms, all run on byte-level toke
 - **SuperBPE.** A two-stage extension. Stage 1 is plain or parity-aware BPE under the pretokenizer
   above. Stage 2 replays the stage-1 merges and continues BPE under a coarser pretokenizer that
   drops word boundaries, allowing cross-word "superwords" to form (`theĠcat`, `defĠmain`). Used by
-  the `SuperBPE-clean-*` and `SuperBPE-apertus-*` candidates. Stage-2 regex requirements are in
-  `~/superbpe/REGEX_PRESETS.md`.
+  the `SuperBPE-clean-*` and `SuperBPE-apertus-*` candidates.
 - **Unigram LM.** SentencePiece-style. Included only as a comparison reference (`Unigram-gpt4o`),
   not a candidate.
 

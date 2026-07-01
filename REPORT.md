@@ -353,7 +353,7 @@ Small transformers trained from scratch on each tokenizer (companion `tokenizer-
 
 - **[Production-safety gates and vocabulary inspection](REPORT_production_safety.md)** — gate verdicts, round-trip fidelity, vocabulary-usage breakdown, long-token / junk-token / dead-vocab examples.
 - **[Appendix: full intrinsic tables](REPORT_appendix_intrinsic.md)** — per-tokenizer × per-language numbers across the broad / core / full FLORES sets, with per-language plots.
-- **Focus candidates** — the four-way comparison of the current candidate set (`preliminary_mul`, `preliminary_enh`, `preliminary_euh`, `preliminary_mul_200k`) with per-language plots is in `REPORT_focus_candidates.md`, which lives with the candidate tokenizers in the **apertus-tokenizer-development** repository (`~/apertus-tokenizer-development/REPORT_focus_candidates.md`).
+- **Focus candidates** — the four-way comparison of the current candidate set (`preliminary_mul`, `preliminary_enh`, `preliminary_euh`, `preliminary_mul_200k`) with per-language plots is in [`REPORT_focus_candidates.md`](REPORT_focus_candidates.md).
 
 ---
 

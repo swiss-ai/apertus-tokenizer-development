@@ -25,7 +25,7 @@ Build recipes (variant keys in `train_tokenizer.py`):
 
 Full training recipes, environment, data, and reproduction steps: [TRAINING.md](TRAINING.md).
 
-Each folder contains `tokenizer.json`, `tokenizer_config.json`, and `special_tokens_map.json`. The same files are on the Hub at `cmeister/apertus_v2_tokenizer` under matching subfolders.
+Each folder contains `tokenizer.json`, `tokenizer_config.json`, and `special_tokens_map.json`.
 
 ## Common to all
 
@@ -72,12 +72,6 @@ print(ids)                               # [1, 33882, 135, 1825, 124, 2]   (<s> 
 print(tok.decode(ids))                              # <s>Hello, world!</s>
 print(tok.decode(ids, skip_special_tokens=True))    # Hello, world!
 print(tok("Hello, world!", add_special_tokens=False).input_ids)  # [33882, 135, 1825, 124]
-```
-
-Loading the same files from the Hub instead of a local checkout:
-
-```python
-tok = AutoTokenizer.from_pretrained("cmeister/apertus_v2_tokenizer", subfolder="preliminary_enh")
 ```
 
 ## Usage: `tokenizers` (`Tokenizer`)
