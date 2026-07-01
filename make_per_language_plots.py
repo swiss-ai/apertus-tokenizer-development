@@ -23,14 +23,11 @@ import matplotlib.pyplot as plt
 from matplotlib.patches import Patch
 from tokenizers import Tokenizer
 
-PARALLEL_DIR = "/users/cmeister747/tokenizer-intrinsic-evals/parallel"
+PARALLEL_DIR = "path/to/flores_parallel"  # FLORES parallel text, one file per language
 # Apertus v1 vocab == Mistral-Nemo-Base-2407 (verified identical FLORES
-# sentences-per-token, e.g. Tibetan 0.0031). Using the stable /store copy.
-APERTUS_V1 = (
-    "/capstor/store/cscs/swissai/infra01/hf_models/ARCHIVE/"
-    "models_bak/Apertus-70B-2509/tokenizer.json"
-)
-O200K = "/users/cmeister747/tokenizer-intrinsic-evals/tokenizers/gpt_4o_hf.json"
+# sentences-per-token, e.g. Tibetan 0.0031).
+APERTUS_V1 = "path/to/Apertus-70B-2509/tokenizer.json"
+O200K = "path/to/gpt_4o_hf.json"  # o200k (GPT-4o) tokenizer.json
 
 # (panel title, tokenizer.json path). Order matches per_language_compression.
 TOKENIZERS = [
