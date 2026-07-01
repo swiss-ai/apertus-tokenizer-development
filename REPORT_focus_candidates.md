@@ -60,10 +60,11 @@ three 131k candidates each lead on one axis:
   multilingual and fairness gains. European languages compress less than under
   Apertus v1. The fit when English compression is the priority.
 
-Trained-LM (extrinsic) results are in §6 for the two 131k candidates whose exact
-tokenizer was trained (`preliminary_enh`, `preliminary_euh`). `preliminary_mul`'s
-`reparam` tokenizer was not trained, and the 200k candidate is left out of that
-comparison because its vocabulary size confounds a like-for-like reading.
+Trained-LM (extrinsic) results are in §6 for `preliminary_enh` and
+`preliminary_euh`; all three 131k candidates were trained on their exact shipped
+tokenizer, and the full downstream panel (including `preliminary_mul`) is in
+REPORT.md. The 200k candidate is left out of the §6 comparison because its
+vocabulary size confounds a like-for-like reading.
 
 Compression cells in §1 show `(% diff vs Apertus v1)`. Higher sent/tok and
 higher bytes/token are better.
@@ -261,13 +262,14 @@ lower throughput here: `preliminary_mul_200k` matches the 131k candidates.
 
 ## 6. Extrinsic: 1B-parameter LM (131k candidates)
 
-Two of the three 131k candidates have a directly-attributable trained LM (the
-training tokenizer is byte-identical in vocabulary and encoding to the shipped
-`tokenizer.json`): `preliminary_enh` and `preliminary_euh`. `preliminary_mul`
-(the `reparam` tokenizer) was not trained as an LM; the nearest run
-(`consv2-plus3-repcap8`) shares 123,455 of 131,072 tokens but has different
-language ratios and vocabulary size (131017), so it is not reported here as
-`preliminary_mul`.
+All three 131k candidates have a directly-attributable trained LM whose training
+tokenizer is byte-identical (vocabulary and encoding) to the shipped
+`tokenizer.json`. This section details `preliminary_enh` and `preliminary_euh`;
+`preliminary_mul` was trained on the byte-identical `prelim-mul-v131072` run (the
+sha256 of its training tokenizer matches the shipped `preliminary_mul`), and its
+full downstream row is in REPORT.md's extrinsic panel. An earlier proxy run
+(`consv2-plus3-repcap8`, vocabulary 131017, sharing 123,455 of 131,072 tokens) is
+superseded by that exact-match run.
 
 `preliminary_mul_200k` was trained and evaluated downstream as well, but its
 results are not presented here as a like-for-like comparison. A different
