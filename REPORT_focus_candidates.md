@@ -264,12 +264,12 @@ lower throughput here: `preliminary_mul_200k` matches the 131k candidates.
 
 All three 131k candidates have a directly-attributable trained LM whose training
 tokenizer is byte-identical (vocabulary and encoding) to the shipped
-`tokenizer.json`. This section details `preliminary_enh` and `preliminary_euh`;
-`preliminary_mul` was trained on the byte-identical `prelim-mul-v131072` run (the
-sha256 of its training tokenizer matches the shipped `preliminary_mul`), and its
-full downstream row is in REPORT.md's extrinsic panel. An earlier proxy run
-(`consv2-plus3-repcap8`, vocabulary 131017, sharing 123,455 of 131,072 tokens) is
-superseded by that exact-match run.
+`tokenizer.json`: `preliminary_enh`, `preliminary_euh`, and `preliminary_mul`.
+`preliminary_mul` was trained on the `prelim-mul-v131072` run, whose
+training-tokenizer sha256 matches the shipped `preliminary_mul`; an earlier proxy
+run (`consv2-plus3-repcap8`, vocabulary 131017, sharing 123,455 of 131,072 tokens)
+is superseded by it. The main results for all three are below; the full
+per-tokenizer panel is in REPORT.md.
 
 `preliminary_mul_200k` was trained and evaluated downstream as well, but its
 results are not presented here as a like-for-like comparison. A different
@@ -290,42 +290,31 @@ languages (BPB is normalized per byte, so it compares across tokenizers), BLiMP,
 Belebele (31 languages), MGSM, GSM8K, HumanEval (0-shot), MBPP (3-shot), and
 MC-math (k=5, 500 examples per dataset). One seed per tokenizer.
 
-Standard-1B:
+BPB, BLiMP, and Belebele are from the standard 9B run; MC-math, GSM8K, HumanEval,
+and MBPP are from the 20B math+code run (`mathcode-scratch`). The full
+per-tokenizer panel (every metric, every tokenizer, and the 10B-vs-20B
+justification) is in REPORT.md.
 
-| Metric | `preliminary_enh` | `preliminary_euh` |
-|---|---|---|
-| Validation BPB ↓ | 0.7253 | 0.7253 |
-| LM FLORES BPB (214 lang) ↓ | 2.982 | 2.979 |
-| BLiMP acc ↑ | 0.820 | 0.820 |
-| Belebele acc ↑ | 0.240 | 0.256 |
-| MGSM flexible ↑ | 0.0160 | 0.0109 |
-| GSM8K strict ↑ | 0.0265 | 0.0311 |
-| HumanEval pass@1 ↑ | 0.0122 | 0.0183 |
-| MBPP pass@1 ↑ | 0.046 | 0.036 |
+| Metric | `preliminary_enh` | `preliminary_euh` | `preliminary_mul` |
+|---|---|---|---|
+| Validation BPB ↓ | 0.725 | 0.725 | 0.728 |
+| LM FLORES BPB (214 lang) ↓ | 2.982 | 2.979 | 2.965 |
+| BLiMP acc ↑ | 0.820 | 0.820 | 0.814 |
+| Belebele acc ↑ | 0.240 | 0.256 | 0.249 |
+| MC-math ↑ | 0.273 | 0.279 | 0.285 |
+| GSM8K strict (≤500) ↑ | 0.228 | 0.224 | 0.210 |
+| HumanEval pass@1 ↑ | 0.079 | 0.116 | 0.024 |
+| MBPP pass@1 ↑ | 0.154 | 0.102 | 0.170 |
 
-Mathcode-scratch (20B math+code):
-
-| Metric | `preliminary_enh` | `preliminary_euh` |
-|---|---|---|
-| Validation BPB ↓ | 0.3423 | 0.3433 |
-| LM FLORES BPB (214 lang) ↓ | 3.555 | 3.537 |
-| HumanEval pass@1 ↑ | 0.079 | 0.116 |
-| MBPP pass@1 ↑ | 0.154 | 0.102 |
-| GSM8K strict (limit 500) ↑ | 0.228 | 0.224 |
-| MC-math gsm8k / math / pythonio ↑ | 0.274 / 0.284 / 0.260 | 0.258 / 0.302 / 0.276 |
-
-`preliminary_enh` and `preliminary_euh` are close on the metrics tied to general
-modeling: identical validation BPB (0.7253), LM FLORES BPB 2.982 vs 2.979, and
-BLiMP 0.820 for both. `preliminary_euh` is higher on Belebele (0.256 vs 0.240).
-The math and code numbers are small, single-seed, and computed on at most 500
-examples, with wide confidence intervals, and they do not point one way:
-`preliminary_euh` is higher on standard GSM8K and HumanEval and on mathcode
-HumanEval (0.116 vs 0.079) and two of three MC-math datasets, while
-`preliminary_enh` is higher on MBPP in both regimes. At this model size and token
-budget there is no consistent downstream separation between the two; the choice
-between them rests on the intrinsic compression profile (English for
-`preliminary_enh`, European for `preliminary_euh`), not on these extrinsic
-numbers.
+The three 131k candidates are close on general modeling: validation BPB 0.725 to
+0.728, LM FLORES BPB 2.965 to 2.982 (`preliminary_mul` lowest), and BLiMP 0.814 to
+0.820. The math and code numbers are small, single-seed, computed on at most 500
+examples with wide confidence intervals, and do not point one way: `preliminary_mul`
+is highest on MBPP (0.170) and MC-math (0.285), `preliminary_euh` on HumanEval
+(0.116), `preliminary_enh` on GSM8K (0.228). At this model size and token budget
+there is no consistent downstream separation; the choice among them rests on the
+intrinsic compression profile (English for `preliminary_enh`, European for
+`preliminary_euh`, balanced for `preliminary_mul`), not on these extrinsic numbers.
 
 ## Takeaways
 
