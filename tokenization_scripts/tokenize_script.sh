@@ -15,13 +15,6 @@ else
   exit 1
 fi
 
-REHYDRATE=False # Set to True or False
-if [ "$REHYDRATE" = "True" ]; then
-  REHYDRATE_FLAG="--rehydrate"
-else
-  REHYDRATE_FLAG=""
-fi
-
 RES_OPT=""
 if [ -n "${RESERVATION:-}" ] || [ -n "${reservation:-}" ]; then
   VAL="${RESERVATION:-$reservation}"
@@ -47,5 +40,5 @@ for paths_file in "$PATH_TO_PREPROCESSING_METADATA/dumps"/*; do
   dump=$(grep -oP '(?<=paths_file_)\d+(?=\.txt)' <<<$paths_file)
   output_folder=$DATASET_OUTPUT_FOLDER_NAME/dump-$dump
   logging_dir=$PATH_TO_DATATROVE_LOGGING_DIR/$TOKENIZER_NAME/$DATASET_NAME/dump-$dump
-  sbatch $RES_OPT --partition=$PARTITION --account=$ACCOUNT --nodes=$NODES --gres=gpu:$GPUS --time=$TIME --cpus-per-task=$CPUS_PER_TASK $NO_REQUEUE --job-name=tokenize-$DATASET_NAME-dump-$dump --output=$PATH_TO_SLURM_LOGGING_DIR/R-%x-%j.out --error=$PATH_TO_SLURM_LOGGING_DIR/R-%x-%j.err tokenize.sh $PATH_TO_PREPROCESSING_METADATA/raw-dataset-link $output_folder $TOKENIZER $logging_dir $CSV_RESULTS_FILE $paths_file $NUMBER_OF_DATATROVE_TASKS $COLUMN_KEY $REHYDRATE_FLAG
+  sbatch $RES_OPT --partition=$PARTITION --account=$ACCOUNT --nodes=$NODES --gres=gpu:$GPUS --time=$TIME --cpus-per-task=$CPUS_PER_TASK $NO_REQUEUE --job-name=tokenize-$DATASET_NAME-dump-$dump --output=$PATH_TO_SLURM_LOGGING_DIR/R-%x-%j.out --error=$PATH_TO_SLURM_LOGGING_DIR/R-%x-%j.err tokenize.sh $PATH_TO_PREPROCESSING_METADATA/raw-dataset-link $output_folder $TOKENIZER $logging_dir $CSV_RESULTS_FILE $paths_file $NUMBER_OF_DATATROVE_TASKS $COLUMN_KEY $REHYDRATE_FLAG $EXTENSION
 done

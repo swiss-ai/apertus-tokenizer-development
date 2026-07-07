@@ -44,7 +44,8 @@ srun --environment=$ENV_FILE \
   --dataset $input_folder \
   --paths-file $paths_file \
   --column $COLUMN_KEY \
-  $REHYDRATE_FLAG
+  --extension $EXTENSION \
+  --rehydrate $REHYDRATE_FLAG
 
 end=$(date +%s)
 end_s=$(date)

@@ -5,8 +5,9 @@ python3 preprocess_megatron.py --tokenizer-name-or-path meta-llama/Meta-Llama-3-
 import argparse
 
 from data_pipeline_pretrain.pipeline.tokens import MegatronDocumentTokenizer
+from data_pipeline_pretrain.pipeline.tokens import Rehydrater
 from datatrove.executor.local import LocalPipelineExecutor
-from datatrove.pipeline.readers import ParquetReader
+from datatrove.pipeline.readers import ParquetReader, JsonlReader
 
 
 def get_args():
@@ -71,6 +72,17 @@ def get_args():
         default="text",
         help="Column to preprocess from the Dataset. Default: text",
     )
+    group.add_argument(
+        "--rehydrate",
+        action="store_true",
+        help="Whether to rehydrate the dataset. Default: False",
+    )
+    group.add_argument(
+        "--extension",
+        type=str,
+        default=".parquet",
+        help="File extension to use. e.g. .parquet or .jsonl.zst. Default: .parquet",
+    )
 
     args = parser.parse_args()
 
@@ -85,13 +97,23 @@ def main(args):
     if n_tasks > number_of_files:
         n_tasks = number_of_files
 
+    if "jsonl" in args.extension:
+        reader = JsonlReader(
+            data_folder=args.dataset,
+            paths_file=args.paths_file,
+            text_key=args.column,
+        )
+    else:
+        reader = ParquetReader(
+            data_folder=args.dataset,
+            paths_file=args.paths_file,
+            text_key=args.column,
+        )
+
     preprocess_executor = LocalPipelineExecutor(
         pipeline=[
-            ParquetReader(
-                data_folder=args.dataset,
-                paths_file=args.paths_file,
-                text_key=args.column,
-            ),
+            reader,
+            *([Rehydrater()] if args.rehydrate else []),
             MegatronDocumentTokenizer(
                 output_folder=args.output_folder,
                 tokenizer_name_or_path=args.tokenizer_name_or_path,
