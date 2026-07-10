@@ -74,7 +74,8 @@ def get_args():
     )
     group.add_argument(
         "--rehydrate",
-        action="store_true",
+        type=str,
+        default="False",
         help="Whether to rehydrate the dataset. Default: False",
     )
     group.add_argument(
@@ -110,10 +111,15 @@ def main(args):
             text_key=args.column,
         )
 
+    do_rehydrate = args.rehydrate is not None and args.rehydrate.lower() in (
+        "true",
+        "1",
+        "yes",
+    )
     preprocess_executor = LocalPipelineExecutor(
         pipeline=[
             reader,
-            *([Rehydrater()] if args.rehydrate else []),
+            *([Rehydrater()] if do_rehydrate else []),
             MegatronDocumentTokenizer(
                 output_folder=args.output_folder,
                 tokenizer_name_or_path=args.tokenizer_name_or_path,
