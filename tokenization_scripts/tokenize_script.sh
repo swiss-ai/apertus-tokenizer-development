@@ -47,7 +47,7 @@ if [ "$DONT_COMPUTE_DUMPS" -eq 0 ]; then
   ln -sfn $DATASET_OUTPUT_FOLDER_NAME $PATH_TO_PREPROCESSING_METADATA/tokenized-dir-link
 
   # Create dumps
-  srun --environment=./env.toml $RES_OPT --partition=$PARTITION --account=$ACCOUNT --job-name=dumps_prep --export=ALL bash -lc "python3 prepare_dumps.py --dataset-folder '${PATH_TO_RAW_DATASET}' --preprocessing-metadata-folder '${PATH_TO_PREPROCESSING_METADATA}' --n-dumps '${DUMPS_NUMBER}'"
+  srun --environment=./env.toml --partition=debug --account=$ACCOUNT --job-name=dumps_prep --export=ALL bash -lc "python3 prepare_dumps.py --dataset-folder '${PATH_TO_RAW_DATASET}' --preprocessing-metadata-folder '${PATH_TO_PREPROCESSING_METADATA}' --n-dumps '${DUMPS_NUMBER}'"
 else
   echo "Skipping dump creation and directory setup due to --dont_compute_dumps flag"
 fi
