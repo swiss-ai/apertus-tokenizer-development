@@ -103,3 +103,28 @@ print(enc.tokens)               # ['<|user_start|>', 'hi', '<|user_end|>']
 ## Status
 
 Preliminary. All four folders prepend `<s>` and append `</s>` via their post-processor (when `add_special_tokens=True`). The `chat_template` is still not written, so `apply_chat_template` is unavailable.
+
+## Tokenization at scale
+We will need the internal data-pipelines-pretrain for tokenization at scale (this in turn depends on datatrove). The following scripts use the necessary toml automatically. The only dependency that needs to be installed is data-pipelines-pretrain. To install it clone data-pipelin-pretrain to your home directory.
+```bash
+cd $HOME
+git clone git@github.com:swiss-ai/data-pipeline-pretrain.git 
+```
+
+ 
+
+The helper scripts live in `./tokenization_scripts/`. The main entrypoint is `tokenize_script.sh`.
+
+Run from the `tokenization_scripts/` directory:
+
+```bash
+cd tokenization_scripts
+./tokenize_script.sh configs_apertus_v2/FineMath-CommonCrawl-subset.cfg
+```
+
+Or run directly from the repo root:
+```bash
+./tokenization_scripts/tokenize_script.sh configs_apertus_v2/FineMath-CommonCrawl-subset.cfg
+```
+
+Replace the example config with any config in `configs_apertus_v2/` as needed.
