@@ -127,7 +127,22 @@ Or run directly from the repo root:
 ./tokenization_scripts/tokenize_script.sh configs_apertus_v2/FineMath-CommonCrawl-subset.cfg
 ```
 
-Replace the example config with any config in `configs_apertus_v2/` as needed.
+Replace the example config with any config in `configs_apertus_v2/` as needed. The most important field is the DUMPS_NUMBER, set this according to the instructions below.
+
+The config fields that the user could modify are:
+```
+# task folders and key parameters config
+TOKENIZER=../preliminary_mul_200k/tokenizer.json
+TOKENIZER_NAME=preliminary_mul_200k
+DATASET_NAME=FineMath-CommonCrawl-subset
+COLUMN_KEY=text #change this to the appropriate column that stores the text
+PATH_TO_RAW_DATASET=/capstor/store/cscs/swissai/infra01/datasets/finemath_only_robots_v2 # change this to the path of the raw data
+PATH_TO_PREPROCESSING_METADATA=/capstor/store/cscs/swissai/infra01/datasets_tokenized/finemath-filterrobots_fine_apertus_v2 # Where dumps are stored
+PATH_TO_OUTPUT_FOLDER=/capstor/store/cscs/swissai/infra01/datasets_tokenized/finemath-filterrobots_fine_apertus_v2          # Where outputs are saved
+DUMPS_NUMBER=35 # This needs to be (size of dataset in GB)/(2GB) for example for a dataset of size 100GB DUMPS_NUMBER=50
+REHYDRATE_FLAG=False # Some datasets need to be rehydrated (upsampled after deduplication) typically these are the fw2 datasets which are globally deduplicated, but there are others. Check the excel sheet.
+EXTENSION=.parquet # File extension. Almost always .parquet.
+```
 
 Sometimes individual tokenization jobs fail this can be inspected from dumps remaining in the dumps folder and not having been moved to the completed-dumps folder. In this case one should rerun the script with the `--dont_recompute_dumps` flag
 
