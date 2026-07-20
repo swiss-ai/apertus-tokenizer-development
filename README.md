@@ -113,7 +113,7 @@ git clone git@github.com:swiss-ai/data-pipeline-pretrain.git
 
  
 
-The helper scripts live in `./tokenization_scripts/`. The main entrypoint is `tokenize_script.sh`.
+The helper scripts live in `./tokenization_scripts/`. The main entry point is `tokenize_script.sh`.
 
 Run from the `tokenization_scripts/` directory:
 
@@ -128,3 +128,22 @@ Or run directly from the repo root:
 ```
 
 Replace the example config with any config in `configs_apertus_v2/` as needed.
+
+Sometimes individual tokenization jobs fail this can be inspected from dumps remaining in the dumps folder and not having been moved to the completed-dumps folder. In this case one should rerun the script with the `--dont_recompute_dumps` flag
+
+```
+./tokenize_script.sh configs_apertus_v2/fineopus-filtered-stage5.cfg --dont_compute_dumps
+```
+.
+
+The outputs at the target folder are
+```
+completed-dumps/
+dumps/
+logs/
+preliminary_mul_200k/
+raw-dataset-link@        --> /capstor/store/cscs/swissai/infra01/datasets/finepdfs-edu_spp_annotated
+tokenize-preliminary_mul_200k-FinePDFs-edu-english.csv
+tokenized-dir-link@      --> preliminary_mul_200k/FinePDFs-edu-english
+```
+`dumps` contains the unfinished dumps, and `completed-dumps` contains the finished dumps, note that these are only text files describing the dumps and not the actual dumps themselves. Tokenized artifacts are generated in the `preliminary_mul_200k` folder. The `logs` folder can also be inspected for any errors or warning during the tokenization process. 
