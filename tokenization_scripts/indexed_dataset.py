@@ -14,6 +14,7 @@ from functools import lru_cache
 from itertools import accumulate
 from types import TracebackType
 from typing import List, Optional, Tuple, Type, Union
+import argparse
 
 import numpy
 import torch
@@ -183,7 +184,7 @@ class _IndexWriter(object):
         # the mode per sequence
         if sequence_modes is not None:
             sequence_modes = numpy.array(sequence_modes, dtype=numpy.int8)
-            self.idx_writer.write(sequence_modes.tobytes(order='C'))
+            self.idx_writer.write(sequence_modes.tobytes(order="C"))
             del sequence_modes
 
     def _sequence_pointers(self, sequence_lengths: List[int]) -> List[int]:
@@ -248,7 +249,9 @@ class _IndexReader(object):
             self.bin_buffer,
             dtype=numpy.int64,
             count=self.document_count,
-            offset=offset + self.sequence_lengths.nbytes + self.sequence_pointers.nbytes,
+            offset=offset
+            + self.sequence_lengths.nbytes
+            + self.sequence_pointers.nbytes,
         )
 
         self.sequence_modes = None
@@ -282,7 +285,9 @@ class _IndexReader(object):
         return self.sequence_count
 
     @lru_cache(maxsize=8)
-    def __getitem__(self, idx: int) -> Tuple[numpy.int32, numpy.int64, Optional[numpy.int8]]:
+    def __getitem__(
+        self, idx: int
+    ) -> Tuple[numpy.int32, numpy.int64, Optional[numpy.int8]]:
         """Return the pointer, length, and mode at the index
 
         Args:
@@ -342,7 +347,9 @@ class _MMapBinReader(_BinReader):
         Returns:
             numpy.ndarray: An array with `count` items and data-type `dtype` constructed from reading bytes from the data file starting at `offset`.
         """
-        return numpy.frombuffer(self._bin_buffer, dtype=dtype, count=count, offset=offset)
+        return numpy.frombuffer(
+            self._bin_buffer, dtype=dtype, count=count, offset=offset
+        )
 
     def __del__(self) -> None:
         """Clean up the object."""
@@ -375,7 +382,7 @@ class _FileBinReader(_BinReader):
             numpy.ndarray: An array with `count` items and data-type `dtype` constructed from reading bytes from the data file starting at `offset`.
         """
         sequence = numpy.empty(count, dtype=dtype)
-        with open(self._bin_path, mode='rb', buffering=0) as bin_buffer_file:
+        with open(self._bin_path, mode="rb", buffering=0) as bin_buffer_file:
             bin_buffer_file.seek(offset)
             bin_buffer_file.readinto(sequence)
         return sequence
@@ -408,9 +415,7 @@ class IndexedDataset(torch.utils.data.Dataset):
 
         self.initialize(path_prefix, multimodal, mmap)
 
-    def initialize(
-        self, path_prefix: str, multimodal: bool, mmap: bool
-    ) -> None:
+    def initialize(self, path_prefix: str, multimodal: bool, mmap: bool) -> None:
         """Initialize the dataset
 
         This method is called by IndexedDataset.__init__ during object creation and by
@@ -425,9 +430,9 @@ class IndexedDataset(torch.utils.data.Dataset):
         """
         idx_path = get_idx_path(path_prefix)
         bin_path = get_bin_path(path_prefix)
-        assert os.path.exists(idx_path) and os.path.exists(
-            bin_path
-        ), f"One or both of the .idx and .bin files cannot be found at the path prefix {path_prefix}"
+        assert os.path.exists(idx_path) and os.path.exists(bin_path), (
+            f"One or both of the .idx and .bin files cannot be found at the path prefix {path_prefix}"
+        )
         self.path_prefix = path_prefix
         self.multimodal = multimodal
         self.mmap = mmap
@@ -504,11 +509,15 @@ class IndexedDataset(torch.utils.data.Dataset):
                 ),
                 sequence_offsets[:-1],
             )
-            return (sequences, sequence_modes) if sequence_modes is not None else sequences
+            return (
+                (sequences, sequence_modes) if sequence_modes is not None else sequences
+            )
         else:
             raise TypeError("Unexpected type received for idx: {}".format(type(idx)))
 
-    def get(self, idx: int, offset: int = 0, length: Optional[int] = None) -> numpy.ndarray:
+    def get(
+        self, idx: int, offset: int = 0, length: Optional[int] = None
+    ) -> numpy.ndarray:
         """Retrieve a single item from the dataset with the option to only
         return a portion of the item.
 
@@ -607,7 +616,10 @@ class IndexedDatasetBuilder(object):
     """
 
     def __init__(
-        self, bin_path: str, dtype: Type[numpy.number] = numpy.int32, multimodal: bool = False
+        self,
+        bin_path: str,
+        dtype: Type[numpy.number] = numpy.int32,
+        multimodal: bool = False,
     ) -> None:
         self.data_file = open(bin_path, "wb")
         self.dtype = dtype
@@ -632,7 +644,10 @@ class IndexedDatasetBuilder(object):
             self.sequence_modes.append(mode)
 
     def add_document(
-        self, tensor: torch.Tensor, lengths: List[int], modes: Optional[List[int]] = None
+        self,
+        tensor: torch.Tensor,
+        lengths: List[int],
+        modes: Optional[List[int]] = None,
     ) -> None:
         """Add an entire document to the dataset
 
@@ -683,7 +698,9 @@ class IndexedDatasetBuilder(object):
         """
         self.data_file.close()
         with _IndexWriter(idx_path, self.dtype) as writer:
-            writer.write(self.sequence_lengths, self.sequence_modes, self.document_indices)
+            writer.write(
+                self.sequence_lengths, self.sequence_modes, self.document_indices
+            )
 
 
 def get_idx_path(path_prefix: str) -> str:
@@ -708,3 +725,73 @@ def get_bin_path(path_prefix: str) -> str:
         str: The path to the data file
     """
     return path_prefix + ".bin"
+
+
+def get_args():
+    parser = argparse.ArgumentParser()
+
+    group = parser.add_argument_group(title="input data")
+    group.add_argument(
+        "--input",
+        type=str,
+        required=True,
+        help="Path to directory containing all document files to merge",
+    )
+
+    group = parser.add_argument_group(title="output data")
+    group.add_argument(
+        "--output-prefix",
+        type=str,
+        required=True,
+        help="Path to binary output file without suffix",
+    )
+
+    args = parser.parse_args()
+
+    assert os.path.isdir(args.input), (
+        f"ERROR: {args.input} is not a directory or does not exist"
+    )
+
+    assert os.path.isdir(os.path.dirname(args.output_prefix)), (
+        f"ERROR: {os.path.dirname(args.output_prefix)} is not a directory or does not exist"
+    )
+
+    return args
+
+
+def main(args):
+    prefixes = set()
+    for basename in os.listdir(args.input):
+        prefix, ext = os.path.splitext(basename)
+
+        if prefix in prefixes:
+            continue
+
+        if not os.path.isfile(os.path.join(args.input, basename)):
+            continue
+
+        ext_pair = ".bin" if ext == ".idx" else ".idx"
+        assert os.path.isfile(os.path.join(args.input, prefix) + ext_pair), (
+            f"ERROR: {ext_pair} file not provided for {os.path.join(args.input, prefix)}"
+        )
+
+        prefixes.add(prefix)
+
+    builder = None
+    for prefix in sorted(prefixes):
+        if builder is None:
+            dataset = IndexedDataset(os.path.join(args.input, prefix))
+            builder = IndexedDatasetBuilder(
+                get_bin_path(args.output_prefix),
+                dtype=dataset.index.dtype,
+            )
+            del dataset
+
+        builder.add_index(os.path.join(args.input, prefix))
+
+    builder.finalize(get_idx_path(args.output_prefix))
+
+
+if __name__ == "__main__":
+    args_ = get_args()
+    main(args_)
