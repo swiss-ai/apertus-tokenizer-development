@@ -734,8 +734,15 @@ def get_args():
     group.add_argument(
         "--input",
         type=str,
-        required=True,
+        required=False,
         help="Path to directory containing all document files to merge",
+    )
+    group.add_argument(
+        "--input-dirs",
+        type=str,
+        nargs="+",
+        required=False,
+        help="List of directories to merge in order (alternative to --input)",
     )
 
     group = parser.add_argument_group(title="output data")
@@ -748,9 +755,23 @@ def get_args():
 
     args = parser.parse_args()
 
-    assert os.path.isdir(args.input), (
-        f"ERROR: {args.input} is not a directory or does not exist"
-    )
+    # Validate that either --input or --input-dirs is provided
+    if args.input is None and args.input_dirs is None:
+        parser.error("Either --input or --input-dirs must be provided")
+    
+    if args.input is not None and args.input_dirs is not None:
+        parser.error("Cannot use both --input and --input-dirs")
+
+    if args.input is not None:
+        assert os.path.isdir(args.input), (
+            f"ERROR: {args.input} is not a directory or does not exist"
+        )
+    
+    if args.input_dirs is not None:
+        for dir_path in args.input_dirs:
+            assert os.path.isdir(dir_path), (
+                f"ERROR: {dir_path} is not a directory or does not exist"
+            )
 
     assert os.path.isdir(os.path.dirname(args.output_prefix)), (
         f"ERROR: {os.path.dirname(args.output_prefix)} is not a directory or does not exist"
@@ -760,34 +781,46 @@ def get_args():
 
 
 def main(args):
-    prefixes = set()
-    for basename in os.listdir(args.input):
-        prefix, ext = os.path.splitext(basename)
-
-        if prefix in prefixes:
-            continue
-
-        if not os.path.isfile(os.path.join(args.input, basename)):
-            continue
-
-        ext_pair = ".bin" if ext == ".idx" else ".idx"
-        assert os.path.isfile(os.path.join(args.input, prefix) + ext_pair), (
-            f"ERROR: {ext_pair} file not provided for {os.path.join(args.input, prefix)}"
-        )
-
-        prefixes.add(prefix)
-
+    # Determine which input mode to use
+    if args.input_dirs is not None:
+        # Multiple directories mode - process in order
+        input_dirs = args.input_dirs
+    else:
+        # Single directory mode - backward compatible
+        input_dirs = [args.input]
+    
     builder = None
-    for prefix in sorted(prefixes):
-        if builder is None:
-            dataset = IndexedDataset(os.path.join(args.input, prefix))
-            builder = IndexedDatasetBuilder(
-                get_bin_path(args.output_prefix),
-                dtype=dataset.index.dtype,
-            )
-            del dataset
+    
+    # Process each directory in order
+    for input_dir in input_dirs:
+        prefixes = set()
+        for basename in os.listdir(input_dir):
+            prefix, ext = os.path.splitext(basename)
 
-        builder.add_index(os.path.join(args.input, prefix))
+            if prefix in prefixes:
+                continue
+
+            if not os.path.isfile(os.path.join(input_dir, basename)):
+                continue
+
+            ext_pair = ".bin" if ext == ".idx" else ".idx"
+            assert os.path.isfile(os.path.join(input_dir, prefix) + ext_pair), (
+                f"ERROR: {ext_pair} file not provided for {os.path.join(input_dir, prefix)}"
+            )
+
+            prefixes.add(prefix)
+
+        # Process prefixes in sorted order within this directory
+        for prefix in sorted(prefixes):
+            if builder is None:
+                dataset = IndexedDataset(os.path.join(input_dir, prefix))
+                builder = IndexedDatasetBuilder(
+                    get_bin_path(args.output_prefix),
+                    dtype=dataset.index.dtype,
+                )
+                del dataset
+
+            builder.add_index(os.path.join(input_dir, prefix))
 
     builder.finalize(get_idx_path(args.output_prefix))
 
