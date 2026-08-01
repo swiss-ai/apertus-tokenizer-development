@@ -205,25 +205,13 @@ while read -r bucket_dumps; do
   # Create the output prefix for this bucket
   OUTPUT_PREFIX="$MERGED_DATA_FOLDER/bucket_$bucket_num"
   
-  # Create the completed dumps list for this bucket
-  BUCKET_COMPLETED_DUMPS="$MERGED_COMPLETED_DUMPS_FOLDER/bucket_$bucket_num.txt"
-  
-  # Collect all parquet files that compose this bucket (from completed-dumps)
-  > "$BUCKET_COMPLETED_DUMPS"  # Clear file
-  for dump_id in $bucket_dumps; do
-    # The completed-dumps folder contains paths_file_<dump_id>.txt files
-    completed_dump_file="$COMPLETED_DUMPS_FOLDER/paths_file_$dump_id.txt"
-    if [ -f "$completed_dump_file" ]; then
-      cat "$completed_dump_file" >> "$BUCKET_COMPLETED_DUMPS"
-    else
-      echo "Warning: Completed dumps file not found: $completed_dump_file"
-    fi
-  done
+  # Prepare list of dump IDs for this bucket (to pass to merge.sh)
+  DUMP_IDS_STR=$(echo $bucket_dumps | tr ' ' ',')
   
   # Submit SLURM job with multiple input directories
   echo "Submitting bucket $bucket_num with dumps: $bucket_dumps (${#DUMP_DIRS[@]} directories)"
   
-  sbatch $RES_OPT --partition=$PARTITION --account=$ACCOUNT --nodes=1 --cpus-per-task=72 --time=4:00:00 $NO_REQUEUE --job-name=merge-$DATASET_NAME-bucket-$bucket_num --output=$PATH_TO_SLURM_LOGGING_DIR/merge-%x-%j.out --error=$PATH_TO_SLURM_LOGGING_DIR/merge-%x-%j.err merge.sh $OUTPUT_PREFIX ${DUMP_DIRS[@]}
+  sbatch $RES_OPT --partition=$PARTITION --account=$ACCOUNT --nodes=1 --cpus-per-task=72 --time=4:00:00 $NO_REQUEUE --job-name=merge-$DATASET_NAME-bucket-$bucket_num --output=$PATH_TO_SLURM_LOGGING_DIR/merge-%x-%j.out --error=$PATH_TO_SLURM_LOGGING_DIR/merge-%x-%j.err merge.sh $OUTPUT_PREFIX "$DUMP_IDS_STR" "$COMPLETED_DUMPS_FOLDER" "$MERGED_COMPLETED_DUMPS_FOLDER" ${DUMP_DIRS[@]}
   
   bucket_num=$((bucket_num + 1))
 done < "$BUCKET_JOBS"
