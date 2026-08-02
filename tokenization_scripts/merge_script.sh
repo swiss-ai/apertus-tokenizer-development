@@ -203,7 +203,9 @@ while read -r bucket_dumps; do
   fi
   
   # Create the output prefix for this bucket
-  OUTPUT_PREFIX="$MERGED_DATA_FOLDER/bucket_$bucket_num"
+  # Create directory structure: data/dump-<num>/00000_tokens
+  mkdir -p "$MERGED_DATA_FOLDER/dump-$bucket_num"
+  OUTPUT_PREFIX="$MERGED_DATA_FOLDER/dump-$bucket_num/00000_tokens"
   
   # Prepare list of dump IDs for this bucket (to pass to merge.sh)
   DUMP_IDS_STR=$(echo $bucket_dumps | tr ' ' ',')
@@ -231,8 +233,8 @@ echo "====================="
 echo ""
 echo "Submitted $total_buckets merge job(s)."
 echo "Output will be in: $MERGED_OUTPUT_FOLDER"
-echo "  Data files: $MERGED_DATA_FOLDER/bucket_*.bin and bucket_*.idx"
-echo "  Parquet file mapping: $MERGED_COMPLETED_DUMPS_FOLDER/bucket_*.txt"
+echo "  Data files: $MERGED_DATA_FOLDER/dump-*/00000_tokens.bin and 00000_tokens.idx"
+echo "  Parquet file mapping: $MERGED_COMPLETED_DUMPS_FOLDER/paths_file_*.txt"
 echo ""
 echo "Monitor jobs with: squeue -u \$USER --name=merge-$DATASET_NAME-bucket-*"
 echo "View logs at: $PATH_TO_SLURM_LOGGING_DIR/merge-*.out"

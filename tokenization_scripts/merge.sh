@@ -29,12 +29,12 @@ fi
 
 set -eo pipefail
 
-# Extract bucket number from output prefix
-bucket_num=$(basename "$output_prefix" | grep -oP '(?<=bucket_)\d+')
+# Extract bucket number from output prefix (now dump-<num>/00000_tokens)
+bucket_num=$(echo "$output_prefix" | grep -oP 'dump-\K\d+(?=/)')
 
 # Check if bucket already exists
 if [ -n "$bucket_num" ]; then
-  BUCKET_COMPLETED_DUMPS="$merged_completed_dumps_folder/bucket_$bucket_num.txt"
+  BUCKET_COMPLETED_DUMPS="$merged_completed_dumps_folder/paths_file_$bucket_num.txt"
   
   if [ -f "$BUCKET_COMPLETED_DUMPS" ]; then
     echo "Bucket $bucket_num already exists at: $BUCKET_COMPLETED_DUMPS"
@@ -86,11 +86,11 @@ sleep 10
 ls -lh ${output_prefix}*
 
 # Now copy completed dumps to merged completed dumps folder
-# Extract bucket number from output prefix
-bucket_num=$(basename "$output_prefix" | grep -oP '(?<=bucket_)\d+')
+# Extract bucket number from output prefix (now dump-<num>/00000_tokens)
+bucket_num=$(echo "$output_prefix" | grep -oP 'dump-\K\d+(?=/)')
 
 if [ -n "$bucket_num" ]; then
-  BUCKET_COMPLETED_DUMPS="$merged_completed_dumps_folder/bucket_$bucket_num.txt"
+  BUCKET_COMPLETED_DUMPS="$merged_completed_dumps_folder/paths_file_$bucket_num.txt"
   
   echo "=== Copying completed dumps metadata ==="
   echo "Creating: $BUCKET_COMPLETED_DUMPS"
