@@ -211,7 +211,7 @@ while read -r bucket_dumps; do
   # Submit SLURM job with multiple input directories
   echo "Submitting bucket $bucket_num with dumps: $bucket_dumps (${#DUMP_DIRS[@]} directories)"
   
-  sbatch $RES_OPT --partition=$PARTITION --account=$ACCOUNT --nodes=1 --cpus-per-task=72 --time=4:00:00 $NO_REQUEUE --job-name=merge-$DATASET_NAME-bucket-$bucket_num --output=$PATH_TO_SLURM_LOGGING_DIR/merge-%x-%j.out --error=$PATH_TO_SLURM_LOGGING_DIR/merge-%x-%j.err merge.sh $OUTPUT_PREFIX "$DUMP_IDS_STR" "$COMPLETED_DUMPS_FOLDER" "$MERGED_COMPLETED_DUMPS_FOLDER" ${DUMP_DIRS[@]}
+  sbatch $RES_OPT --partition=$PARTITION --account=$ACCOUNT --nodes=1 --cpus-per-task=72 --time=1:00:00 $NO_REQUEUE --job-name=merge-$DATASET_NAME-bucket-$bucket_num --output=$PATH_TO_SLURM_LOGGING_DIR/merge-%x-%j.out --error=$PATH_TO_SLURM_LOGGING_DIR/merge-%x-%j.err merge.sh $OUTPUT_PREFIX "$DUMP_IDS_STR" "$COMPLETED_DUMPS_FOLDER" "$MERGED_COMPLETED_DUMPS_FOLDER" ${DUMP_DIRS[@]}
   
   bucket_num=$((bucket_num + 1))
 done < "$BUCKET_JOBS"
