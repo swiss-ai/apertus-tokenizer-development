@@ -169,4 +169,4 @@ The final step of the tokenization process is to merge the tokenized artifacts i
 ./merge_script.sh configs_apertus_v2/FineMath-CommonCrawl-subset.cfg
 ```
 
-The result is a new folder `preliminary_mul_200k/<dataset_name>_merged` which contains two subfolders `data` and `completed-dumps`. These contain the merged dumps and the `.txt` files describing the raw input data. Run this only when tokenization is complete. 
+Merge size is set according to `MERGED_DUMPS_UPPER_SIZE_BOUND_GB=100` in the configs (default = 100 GB). The result is a new folder `preliminary_mul_200k/<dataset_name>_merged` which contains two subfolders `data` and `completed-dumps`. These contain the merged dumps and the `.txt` files describing the raw input data. Run this only when tokenization is complete. 
