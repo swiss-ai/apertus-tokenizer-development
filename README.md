@@ -162,3 +162,11 @@ tokenize-preliminary_mul_200k-FinePDFs-edu-english.csv
 tokenized-dir-link@      --> preliminary_mul_200k/FinePDFs-edu-english
 ```
 `dumps` contains the unfinished dumps, and `completed-dumps` contains the finished dumps, note that these are only text files describing the dumps and not the actual dumps themselves. Tokenized artifacts are generated in the `preliminary_mul_200k` folder. The `logs` folder can also be inspected for any errors or warning during the tokenization process. 
+
+The final step of the tokenization process is to merge the tokenized artifacts into larger merged dumps. This is because tokenization is much easier to parallelize with small dumps (2GB input raw), the resulting 1H jobs are favored by the slurm scheduler and don't inconvenience much other reservation users. At the same time this creates a large number of tokenized .bin .idx files that result in OOM during ingestion. This can be done by running the `merge_script.sh` script. The script is run with one of the tokenization configs like this:
+
+```
+./merge_script.sh configs_apertus_v2/FineMath-CommonCrawl-subset.cfg
+```
+
+The result is a new folder `preliminary_mul_200k/<dataset_name>_merged` which contains two subfolders `data` and `completed-dumps`. These contain the merged dumps and the `.txt` files describing the raw input data. Run this only when tokenization is complete. 
