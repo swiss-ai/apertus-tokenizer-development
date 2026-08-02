@@ -29,6 +29,20 @@ fi
 
 set -eo pipefail
 
+# Extract bucket number from output prefix
+bucket_num=$(basename "$output_prefix" | grep -oP '(?<=bucket_)\d+')
+
+# Check if bucket already exists
+if [ -n "$bucket_num" ]; then
+  BUCKET_COMPLETED_DUMPS="$merged_completed_dumps_folder/bucket_$bucket_num.txt"
+  
+  if [ -f "$BUCKET_COMPLETED_DUMPS" ]; then
+    echo "Bucket $bucket_num already exists at: $BUCKET_COMPLETED_DUMPS"
+    echo "Skipping merge computation."
+    exit 0
+  fi
+fi
+
 # Setup ENV
 export HF_HUB_ENABLE_HF_TRANSFER=0
 
