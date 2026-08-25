@@ -113,7 +113,20 @@ git clone git@github.com:swiss-ai/data-pipeline-pretrain.git
 
  
 
-The helper scripts live in `./tokenization_scripts/`. The main entry point is `tokenize_script.sh`.
+The helper scripts live in `./tokenization_scripts/`. `run_all.py` is the central
+entry point: it validates every config before it starts submitting jobs, skips
+configs whose input root is deliberately empty, and can print the complete plan
+without touching Slurm.
+
+```bash
+python tokenization_scripts/run_all.py plan --all
+python tokenization_scripts/run_all.py submit --all --dry-run
+python tokenization_scripts/run_all.py submit --all
+```
+
+Use `--run FinePDFs-edu-english` instead of `--all` to select one or more config
+filenames. `tokenize_script.sh` remains the per-run launcher used by the central
+entry point.
 
 Run from the `tokenization_scripts/` directory:
 
@@ -140,7 +153,7 @@ PATH_TO_RAW_DATASET=/capstor/store/cscs/swissai/infra01/datasets/finemath_only_r
 PATH_TO_PREPROCESSING_METADATA=/capstor/store/cscs/swissai/infra01/datasets_tokenized/finemath-filterrobots_fine_apertus_v2 # Where dumps are stored
 PATH_TO_OUTPUT_FOLDER=/capstor/store/cscs/swissai/infra01/datasets_tokenized/finemath-filterrobots_fine_apertus_v2          # Where outputs are saved
 DUMPS_NUMBER=35 # This needs to be (size of dataset in GB)/(2GB) for example for a dataset of size 100GB DUMPS_NUMBER=50
-REHYDRATE_FLAG=False # Some datasets need to be rehydrated (upsampled after deduplication) typically these are the fw2 datasets which are globally deduplicated, but there are others. Check the excel sheet.
+PREPROCESSING_TRANSFORMS=sampling.minhash_cluster_upsampling # Optional ordered online transform. Leave empty for already-materialized datasets.
 EXTENSION=.parquet # File extension. Almost always .parquet.
 ```
 

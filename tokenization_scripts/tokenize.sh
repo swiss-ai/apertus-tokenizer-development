@@ -17,7 +17,7 @@ CSV_RESULTS_FILE=$5
 paths_file=$6
 number_of_tasks=$7
 COLUMN_KEY=$8
-REHYDRATE_FLAG=${9}
+TRANSFORM_SPECS=${9:-}
 EXTENSION=${10:-.parquet}
 
 set -eo pipefail
@@ -28,6 +28,14 @@ export HF_HUB_ENABLE_HF_TRANSFER=0
 rm -rf $output_folder
 rm -rf $logging_dir
 mkdir -p $output_folder
+
+TRANSFORM_ARGS=()
+if [ -n "$TRANSFORM_SPECS" ]; then
+  read -r -a TRANSFORM_VALUES <<< "$TRANSFORM_SPECS"
+  for transform_spec in "${TRANSFORM_VALUES[@]}"; do
+    TRANSFORM_ARGS+=(--transform "$transform_spec")
+  done
+fi
 
 echo "START TIME: $(date) | Preprocessing $paths_file with $number_of_tasks tasks per node with the $tokenizer tokenizer. Storing tokenized dataset in $output_folder"
 start_s=$(date)
@@ -45,7 +53,7 @@ srun --environment=$ENV_FILE \
   --paths-file $paths_file \
   --column $COLUMN_KEY \
   --extension $EXTENSION \
-  --rehydrate $REHYDRATE_FLAG
+  "${TRANSFORM_ARGS[@]}"
 
 end=$(date +%s)
 end_s=$(date)

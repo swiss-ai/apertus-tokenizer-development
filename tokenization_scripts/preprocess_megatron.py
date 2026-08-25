@@ -1,13 +1,30 @@
+#!/usr/bin/env python3
 """
 python3 preprocess_megatron.py --tokenizer-name-or-path meta-llama/Meta-Llama-3-8B --output-folder tokenized_datasets/fineweb-edu --n-tasks 16 --dataset datasets/fineweb-edu/raw-dataset-link --paths-file datasets/fineweb-edu/dumps/paths_file_0.txt
 """
 
 import argparse
+import warnings
 
-from data_pipeline_pretrain.pipeline.tokens import MegatronDocumentTokenizer
-from data_pipeline_pretrain.pipeline.tokens import Rehydrater
+from data_pipeline_pretrain.pipeline.tokens import (
+    MegatronDocumentTokenizer,
+    ProvenanceParquetReader,
+)
 from datatrove.executor.local import LocalPipelineExecutor
-from datatrove.pipeline.readers import ParquetReader, JsonlReader
+from datatrove.pipeline.readers import JsonlReader
+
+if __package__:
+    from .runner.transforms import (
+        MINHASH_UPSAMPLING,
+        build_transforms,
+        parse_transform_request,
+    )
+else:
+    from runner.transforms import (
+        MINHASH_UPSAMPLING,
+        build_transforms,
+        parse_transform_request,
+    )
 
 
 def get_args():
@@ -76,7 +93,13 @@ def get_args():
         "--rehydrate",
         type=str,
         default="False",
-        help="Whether to rehydrate the dataset. Default: False",
+        help="Deprecated alias for --transform sampling.minhash_cluster_upsampling",
+    )
+    group.add_argument(
+        "--transform",
+        action="append",
+        default=[],
+        help="Ordered transform type, optionally followed by =<compact JSON object>",
     )
     group.add_argument(
         "--extension",
@@ -95,8 +118,9 @@ def main(args):
     # Check number of files > n tasks
     with open(args.paths_file, "rb") as f:
         number_of_files = sum(1 for _ in f)
-    if n_tasks > number_of_files:
-        n_tasks = number_of_files
+    if number_of_files == 0:
+        raise ValueError(f"paths file is empty: {args.paths_file}")
+    n_tasks = min(n_tasks, number_of_files)
 
     if "jsonl" in args.extension:
         reader = JsonlReader(
@@ -105,7 +129,7 @@ def main(args):
             text_key=args.column,
         )
     else:
-        reader = ParquetReader(
+        reader = ProvenanceParquetReader(
             data_folder=args.dataset,
             paths_file=args.paths_file,
             text_key=args.column,
@@ -116,14 +140,30 @@ def main(args):
         "1",
         "yes",
     )
+    transform_values = list(args.transform)
+    if do_rehydrate:
+        if transform_values:
+            raise ValueError("use --transform or deprecated --rehydrate, not both")
+        warnings.warn(
+            "--rehydrate is deprecated; use the minhash upsampling transform",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        transform_values = [MINHASH_UPSAMPLING]
+    transforms = build_transforms(
+        [parse_transform_request(value) for value in transform_values]
+    )
+    provenance = "jsonl" not in args.extension
     preprocess_executor = LocalPipelineExecutor(
         pipeline=[
             reader,
-            *([Rehydrater()] if do_rehydrate else []),
+            *transforms,
             MegatronDocumentTokenizer(
                 output_folder=args.output_folder,
                 tokenizer_name_or_path=args.tokenizer_name_or_path,
                 eos_token=args.eos_token,
+                provenance=provenance,
+                preprocessing_transforms=transforms,
             ),
         ],
         tasks=n_tasks,

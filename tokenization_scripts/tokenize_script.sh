@@ -40,6 +40,14 @@ PATH_TO_DATATROVE_LOGGING_DIR=$PATH_TO_OUTPUT_FOLDER/logs/datatrove_logs        
 PATH_TO_SLURM_LOGGING_DIR=$PATH_TO_OUTPUT_FOLDER/logs/slurm_logs                            # Where slurm logs are stored
 DATASET_OUTPUT_FOLDER_NAME=$PATH_TO_OUTPUT_FOLDER/$TOKENIZER_NAME/$DATASET_NAME             # Where tokenized data is stored
 
+# The old boolean is accepted while configs migrate, but the Python runner only
+# sees an explicit ordered transform type. Dataset-specific text rendering is
+# intentionally absent here: CodeAlchemy and OProofs arrive as materialized text.
+TRANSFORM_SPECS=${PREPROCESSING_TRANSFORMS:-}
+if [ -z "$TRANSFORM_SPECS" ] && [[ "${REHYDRATE_FLAG:-False}" =~ ^([Tt][Rr][Uu][Ee]|1|[Yy][Ee][Ss])$ ]]; then
+  TRANSFORM_SPECS="sampling.minhash_cluster_upsampling"
+fi
+
 if [ "$DONT_COMPUTE_DUMPS" -eq 0 ]; then
   mkdir -p $PATH_TO_PREPROCESSING_METADATA/completed-dumps #used later by tokenize.sh
   mkdir -p $PATH_TO_SLURM_LOGGING_DIR
@@ -58,5 +66,5 @@ for paths_file in "$PATH_TO_PREPROCESSING_METADATA/dumps"/*; do
   dump=$(grep -oP '(?<=paths_file_)\d+(?=\.txt)' <<<$paths_file)
   output_folder=$DATASET_OUTPUT_FOLDER_NAME/dump-$dump
   logging_dir=$PATH_TO_DATATROVE_LOGGING_DIR/$TOKENIZER_NAME/$DATASET_NAME/dump-$dump
-  sbatch $RES_OPT --partition=$PARTITION --account=$ACCOUNT --nodes=$NODES --gres=gpu:$GPUS --time=$TIME --cpus-per-task=$CPUS_PER_TASK $NO_REQUEUE --job-name=tokenize-$DATASET_NAME-dump-$dump --output=$PATH_TO_SLURM_LOGGING_DIR/R-%x-%j.out --error=$PATH_TO_SLURM_LOGGING_DIR/R-%x-%j.err tokenize.sh $PATH_TO_PREPROCESSING_METADATA/raw-dataset-link $output_folder $TOKENIZER $logging_dir $CSV_RESULTS_FILE $paths_file $NUMBER_OF_DATATROVE_TASKS $COLUMN_KEY $REHYDRATE_FLAG $EXTENSION
+  sbatch $RES_OPT --partition=$PARTITION --account=$ACCOUNT --nodes=$NODES --gres=gpu:$GPUS --time=$TIME --cpus-per-task=$CPUS_PER_TASK $NO_REQUEUE --job-name=tokenize-$DATASET_NAME-dump-$dump --output=$PATH_TO_SLURM_LOGGING_DIR/R-%x-%j.out --error=$PATH_TO_SLURM_LOGGING_DIR/R-%x-%j.err tokenize.sh $PATH_TO_PREPROCESSING_METADATA/raw-dataset-link $output_folder $TOKENIZER $logging_dir $CSV_RESULTS_FILE $paths_file $NUMBER_OF_DATATROVE_TASKS $COLUMN_KEY "$TRANSFORM_SPECS" $EXTENSION
 done
