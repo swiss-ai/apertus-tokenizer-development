@@ -4,10 +4,13 @@ python3 preprocess_megatron.py --tokenizer-name-or-path meta-llama/Meta-Llama-3-
 
 import argparse
 
-from data_pipeline_pretrain.pipeline.tokens import MegatronDocumentTokenizer
-from data_pipeline_pretrain.pipeline.tokens import Rehydrater
+from data_pipeline_pretrain.pipeline.tokens import (
+    MegatronDocumentTokenizer,
+    ProvenanceParquetReader,
+    Rehydrater,
+)
 from datatrove.executor.local import LocalPipelineExecutor
-from datatrove.pipeline.readers import ParquetReader, JsonlReader
+from datatrove.pipeline.readers import JsonlReader
 
 
 def get_args():
@@ -104,12 +107,14 @@ def main(args):
             paths_file=args.paths_file,
             text_key=args.column,
         )
+        write_source_map = False
     else:
-        reader = ParquetReader(
+        reader = ProvenanceParquetReader(
             data_folder=args.dataset,
             paths_file=args.paths_file,
             text_key=args.column,
         )
+        write_source_map = True
 
     do_rehydrate = args.rehydrate is not None and args.rehydrate.lower() in (
         "true",
@@ -124,6 +129,7 @@ def main(args):
                 output_folder=args.output_folder,
                 tokenizer_name_or_path=args.tokenizer_name_or_path,
                 eos_token=args.eos_token,
+                provenance=write_source_map,
             ),
         ],
         tasks=n_tasks,
