@@ -134,6 +134,7 @@ def main(args):
         ],
         tasks=n_tasks,
         workers=args.n_workers,
+        start_method="spawn",
         logging_dir=args.logging_dir,
     )
     preprocess_executor.run()
