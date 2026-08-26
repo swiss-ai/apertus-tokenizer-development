@@ -2,50 +2,66 @@
 
 #SBATCH --account=infra01
 #SBATCH --nodes=1
-#SBATCH --gres=gpu:4
 #SBATCH --cpus-per-task=288
 #SBATCH --no-requeue
 #SBATCH --time=00:10:00
 
-ENV_FILE="./env.toml"
-
-input_folder=$1
-output_folder=$2
-tokenizer=$3
-logging_dir=$4
-CSV_RESULTS_FILE=$5
-paths_file=$6
-number_of_tasks=$7
-COLUMN_KEY=$8
-REHYDRATE_FLAG=${9}
-EXTENSION=${10:-.parquet}
+SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+ENV_FILE="$SCRIPT_DIR/env.toml"
 
 set -eo pipefail
+
+CONFIG_FILE=$1
+output_folder=$2
+logging_dir=$3
+paths_file=$4
+PROVENANCE_GROUP_PATH=${5:-}
+COMPLETED_DUMPS_FOLDER=${6:-$(dirname "$(dirname "$paths_file")")/completed-dumps}
+
+source "$CONFIG_FILE"
+
+input_folder=$PATH_TO_PREPROCESSING_METADATA/raw-dataset-link
+CSV_RESULTS_FILE=$PATH_TO_PREPROCESSING_METADATA/tokenize-$TOKENIZER_NAME-$DATASET_NAME.csv
+ID_COLUMN=${ID_COLUMN:-id}
+INCLUDE_BOOLEAN_COLUMN=${INCLUDE_BOOLEAN_COLUMN:-}
+EXCLUSION_REASON_COLUMN=${EXCLUSION_REASON_COLUMN:-exclusion_reason}
+PROVENANCE_PIPELINE_JSON=${PROVENANCE_PIPELINE_JSON:-}
+PROVENANCE_GROUP_KEYS=${PROVENANCE_GROUP_KEYS:-}
+PROVENANCE_DIGEST_FILES=${PROVENANCE_DIGEST_FILES:-}
+TOKENIZER_BATCH_SIZE=${TOKENIZER_BATCH_SIZE:-10000}
 
 # Setup ENV
 export HF_HUB_ENABLE_HF_TRANSFER=0
 # Setup directories
-rm -rf $output_folder
-rm -rf $logging_dir
-mkdir -p $output_folder
+rm -rf "$output_folder"
+rm -rf "$logging_dir"
+mkdir -p "$output_folder"
 
-echo "START TIME: $(date) | Preprocessing $paths_file with $number_of_tasks tasks per node with the $tokenizer tokenizer. Storing tokenized dataset in $output_folder"
+echo "START TIME: $(date) | Preprocessing $paths_file with $NUMBER_OF_DATATROVE_TASKS tasks per node with the $TOKENIZER tokenizer. Storing tokenized dataset in $output_folder"
 start_s=$(date)
 start=$(date +%s)
 
 # 2. Add srun --environment to execute the python command inside the container
-srun --environment=$ENV_FILE \
+srun --environment="$ENV_FILE" \
   numactl --membind=0-3 \
-  python3 preprocess_megatron.py \
-  --tokenizer-name-or-path $tokenizer \
-  --output-folder $output_folder \
-  --logging-dir $logging_dir \
-  --n-tasks $number_of_tasks \
-  --dataset $input_folder \
-  --paths-file $paths_file \
-  --column $COLUMN_KEY \
-  --extension $EXTENSION \
-  --rehydrate $REHYDRATE_FLAG
+  python3 "$SCRIPT_DIR/preprocess_megatron.py" \
+  --tokenizer-name-or-path "$TOKENIZER" \
+  --output-folder "$output_folder" \
+  --logging-dir "$logging_dir" \
+  --n-tasks "$NUMBER_OF_DATATROVE_TASKS" \
+  --dataset "$input_folder" \
+  --paths-file "$paths_file" \
+  --column "$COLUMN_KEY" \
+  --id-column "$ID_COLUMN" \
+  --extension "${EXTENSION:-.parquet}" \
+  --rehydrate "$REHYDRATE_FLAG" \
+  --include-boolean-column "$INCLUDE_BOOLEAN_COLUMN" \
+  --exclusion-reason-column "$EXCLUSION_REASON_COLUMN" \
+  --provenance-pipeline-json "$PROVENANCE_PIPELINE_JSON" \
+  --provenance-group-keys "$PROVENANCE_GROUP_KEYS" \
+  --provenance-group-path "$PROVENANCE_GROUP_PATH" \
+  --provenance-digest-files "$PROVENANCE_DIGEST_FILES" \
+  --tokenizer-batch-size "$TOKENIZER_BATCH_SIZE"
 
 end=$(date +%s)
 end_s=$(date)
@@ -54,17 +70,18 @@ echo "FINISH TIME: $(date) | Preprocessed $paths_file ! Stored in $output_folder
 # Stats
 wc=$((end - start))
 
-dataset_total_size=$(srun --environment=$ENV_FILE python3 compute_dump_size.py $paths_file)
+dataset_total_size=$(srun --environment="$ENV_FILE" python3 "$SCRIPT_DIR/compute_dump_size.py" "$paths_file")
 
-processed_total_size=$(du -shLb $output_folder | cut -f1)
+processed_total_size=$(du -shLb "$output_folder" | cut -f1)
 
 bw=$(awk "BEGIN {print $dataset_total_size/$wc}")
-total_tokens_processed=$(($(du -shLcb $output_folder/*.bin | tail -n1 | sed -r 's/([^0-9]*([0-9]*)){1}.*/\2/') / 4))
+total_tokens_processed=$(($(du -shLcb "$output_folder"/*.bin | tail -n1 | sed -r 's/([^0-9]*([0-9]*)){1}.*/\2/') / 4))
 throughput=$(awk "BEGIN {print $total_tokens_processed/$wc}")
 
-echo "$SLURM_JOB_ID,$(hostname),$start_s,$end_s,$paths_file,$output_folder,$dataset_total_size,$processed_total_size,$number_of_tasks,$wc,$bw,$total_tokens_processed,$throughput"
-echo "$SLURM_JOB_ID,$(hostname),$start_s,$end_s,$paths_file,$output_folder,$dataset_total_size,$processed_total_size,$number_of_tasks,$wc,$bw,$total_tokens_processed,$throughput" >>$CSV_RESULTS_FILE
+echo "$SLURM_JOB_ID,$(hostname),$start_s,$end_s,$paths_file,$output_folder,$dataset_total_size,$processed_total_size,$NUMBER_OF_DATATROVE_TASKS,$wc,$bw,$total_tokens_processed,$throughput"
+echo "$SLURM_JOB_ID,$(hostname),$start_s,$end_s,$paths_file,$output_folder,$dataset_total_size,$processed_total_size,$NUMBER_OF_DATATROVE_TASKS,$wc,$bw,$total_tokens_processed,$throughput" >>"$CSV_RESULTS_FILE"
 
 sleep 10
-ls -lS $output_folder
-mv $paths_file $(dirname $(dirname $paths_file))/completed-dumps
+ls -lS "$output_folder"
+mkdir -p "$COMPLETED_DUMPS_FOLDER"
+mv "$paths_file" "$COMPLETED_DUMPS_FOLDER/"

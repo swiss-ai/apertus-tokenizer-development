@@ -4,7 +4,9 @@ python3 preprocess_megatron.py --tokenizer-name-or-path meta-llama/Meta-Llama-3-
 """
 
 import argparse
+import hashlib
 import json
+from pathlib import PurePosixPath
 
 from data_pipeline_pretrain.pipeline.tokens import (
     MegatronDocumentTokenizer,
@@ -58,18 +60,6 @@ def get_args():
         default=-1,
         help="Number of workers executing concurrently --n-tasks tasks. Default: -1, which means --n-workers==--n-tasks",
     )
-    group.add_argument(
-        "--local-tasks",
-        type=int,
-        default=-1,
-        help="Number of this run's tasks to execute. Default: all tasks",
-    )
-    group.add_argument(
-        "--rank-offset",
-        type=int,
-        default=0,
-        help="First global task rank executed by this run. Default: 0",
-    )
     group = parser.add_argument_group(title="Dataset configs")
     group.add_argument(
         "--dataset",
@@ -122,6 +112,21 @@ def get_args():
         help="Optional declared pipeline facts recorded in every token .map",
     )
     group.add_argument(
+        "--provenance-group-keys",
+        default="",
+        help="Comma-separated pipeline keys populated from the grouped dump path",
+    )
+    group.add_argument(
+        "--provenance-group-path",
+        default="",
+        help="Slash-separated grouped dump path recorded under the configured keys",
+    )
+    group.add_argument(
+        "--provenance-digest-files",
+        default="",
+        help="Comma-separated name=path files whose SHA-256 pins pipeline inputs",
+    )
+    group.add_argument(
         "--tokenizer-batch-size",
         type=int,
         default=10000,
@@ -141,15 +146,6 @@ def main(args):
     n_tasks = min(n_tasks, number_of_files)
     if n_tasks < 1:
         raise ValueError("paths file contains no inputs")
-
-    local_tasks = getattr(args, "local_tasks", -1)
-    rank_offset = getattr(args, "rank_offset", 0)
-    if local_tasks == -1:
-        local_tasks = n_tasks
-    if local_tasks < 1 or rank_offset < 0 or rank_offset + local_tasks > n_tasks:
-        raise ValueError(
-            "local task range must be non-empty and contained in the global tasks"
-        )
 
     if "jsonl" in args.extension:
         reader = JsonlReader(
@@ -188,6 +184,45 @@ def main(args):
         pipeline_facts = json.loads(pipeline_facts) if pipeline_facts else None
     if pipeline_facts is not None and not isinstance(pipeline_facts, dict):
         raise ValueError("provenance pipeline facts must be a JSON object")
+    group_keys = [
+        key
+        for key in getattr(args, "provenance_group_keys", "").split(",")
+        if key
+    ]
+    group_parts = (
+        PurePosixPath(getattr(args, "provenance_group_path", "")).parts
+        if group_keys
+        else ()
+    )
+    if len(group_keys) != len(group_parts):
+        raise ValueError("provenance group keys must match the grouped dump path")
+    if group_keys:
+        pipeline_facts = dict(pipeline_facts or {})
+        overlap = set(group_keys) & pipeline_facts.keys()
+        if overlap:
+            raise ValueError(f"provenance group keys already exist: {sorted(overlap)}")
+        pipeline_facts.update(zip(group_keys, group_parts))
+    digest_specs = [
+        spec
+        for spec in getattr(args, "provenance_digest_files", "").split(",")
+        if spec
+    ]
+    if digest_specs:
+        pipeline_facts = dict(pipeline_facts or {})
+        existing_digests = pipeline_facts.get("digests")
+        if existing_digests is not None and not isinstance(existing_digests, dict):
+            raise ValueError("provenance pipeline digests must be a JSON object")
+        digests = dict(existing_digests or {})
+        for spec in digest_specs:
+            name, separator, path = spec.partition("=")
+            if not separator or not name or not path or name in digests:
+                raise ValueError(f"invalid or duplicate provenance digest: {spec!r}")
+            digest = hashlib.sha256()
+            with open(path, "rb") as handle:
+                for block in iter(lambda: handle.read(8 * 1024 * 1024), b""):
+                    digest.update(block)
+            digests[name] = digest.hexdigest()
+        pipeline_facts["digests"] = digests
 
     do_rehydrate = args.rehydrate is not None and args.rehydrate.lower() in (
         "true",
@@ -209,8 +244,6 @@ def main(args):
             ),
         ],
         tasks=n_tasks,
-        local_tasks=local_tasks,
-        local_rank_offset=rank_offset,
         workers=args.n_workers,
         start_method="spawn",
         logging_dir=args.logging_dir,
