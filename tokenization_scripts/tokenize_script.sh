@@ -47,9 +47,6 @@ DATASET_OUTPUT_FOLDER_NAME=${DATASET_OUTPUT_FOLDER_NAME:-$PATH_TO_OUTPUT_FOLDER/
 ID_COLUMN=${ID_COLUMN:-id}
 INCLUDE_BOOLEAN_COLUMN=${INCLUDE_BOOLEAN_COLUMN:-}
 EXCLUSION_REASON_COLUMN=${EXCLUSION_REASON_COLUMN:-exclusion_reason}
-PROVENANCE_PIPELINE_JSON=${PROVENANCE_PIPELINE_JSON:-}
-PROVENANCE_GROUP_KEYS=${PROVENANCE_GROUP_KEYS:-}
-PROVENANCE_DIGEST_FILES=${PROVENANCE_DIGEST_FILES:-}
 DUMP_GROUP_FIELDS=${DUMP_GROUP_FIELDS:-}
 DUMP_GROUP_METADATA=${DUMP_GROUP_METADATA:-}
 DUMP_GROUP_METADATA_ROOT=${DUMP_GROUP_METADATA_ROOT:-}
@@ -145,7 +142,7 @@ while IFS= read -r paths_file; do
   fi
   sbatch "${submit_args[@]}" "$SCRIPT_DIR/tokenize.sh" \
     "$CONFIG_FILE" "$output_folder" "$logging_dir" "$paths_file" \
-    "$group_path" "$completed_folder"
+    "$completed_folder"
 done < <(find "$dumps_root" -type f -name 'paths_file_*.txt' -print | sort)
 
 if [ "$found_dumps" -eq 0 ]; then

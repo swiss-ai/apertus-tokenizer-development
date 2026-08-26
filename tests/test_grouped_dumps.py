@@ -37,9 +37,6 @@ class GroupedDumpsTest(unittest.TestCase):
         manifest.write_text(
             "".join(json.dumps(row) + "\n" for row in rows), encoding="utf-8"
         )
-        (self.source / "summary.json").write_text(
-            '{"complete":true}\n', encoding="utf-8"
-        )
         (self.source / "languages.json").write_text(
             json.dumps(
                 {
@@ -175,9 +172,6 @@ class GroupedDumpsTest(unittest.TestCase):
                     "MAX_DUMP_BYTES=150000000000",
                     "INCLUDE_BOOLEAN_COLUMN=apertus_include",
                     "EXCLUSION_REASON_COLUMN=exclusion_reason",
-                    "PROVENANCE_GROUP_KEYS=language_category,language_slug",
-                    "PROVENANCE_PIPELINE_JSON='{\"dataset\":\"grouped-fixture\"}'",
-                    f"PROVENANCE_DIGEST_FILES=summary={self.source / 'summary.json'}",
                     "REHYDRATE_FLAG=False",
                     "EXTENSION=.parquet",
                     "NUMBER_OF_DATATROVE_TASKS=4",
@@ -202,9 +196,7 @@ class GroupedDumpsTest(unittest.TestCase):
             any("programming/python/dump-0" in call for call in submitted)
         )
         self.assertTrue(any("data/json/dump-0" in call for call in submitted))
-        self.assertTrue(
-            any(f"{config} " in call and " programming/python " in call for call in submitted)
-        )
+        self.assertTrue(any(f"{config} " in call for call in submitted))
 
     def test_ungrouped_config_keeps_the_existing_dump_layout(self):
         (self.source / "one.parquet").write_bytes(b"one")

@@ -4,9 +4,6 @@ python3 preprocess_megatron.py --tokenizer-name-or-path meta-llama/Meta-Llama-3-
 """
 
 import argparse
-import hashlib
-import json
-from pathlib import PurePosixPath
 
 from data_pipeline_pretrain.pipeline.tokens import (
     MegatronDocumentTokenizer,
@@ -107,26 +104,6 @@ def get_args():
         help="Metadata column explaining excluded rows",
     )
     group.add_argument(
-        "--provenance-pipeline-json",
-        default="",
-        help="Optional declared pipeline facts recorded in every token .map",
-    )
-    group.add_argument(
-        "--provenance-group-keys",
-        default="",
-        help="Comma-separated pipeline keys populated from the grouped dump path",
-    )
-    group.add_argument(
-        "--provenance-group-path",
-        default="",
-        help="Slash-separated grouped dump path recorded under the configured keys",
-    )
-    group.add_argument(
-        "--provenance-digest-files",
-        default="",
-        help="Comma-separated name=path files whose SHA-256 pins pipeline inputs",
-    )
-    group.add_argument(
         "--tokenizer-batch-size",
         type=int,
         default=10000,
@@ -179,51 +156,6 @@ def main(args):
                 ),
             )
         )
-    pipeline_facts = getattr(args, "provenance_pipeline_json", "")
-    if isinstance(pipeline_facts, str):
-        pipeline_facts = json.loads(pipeline_facts) if pipeline_facts else None
-    if pipeline_facts is not None and not isinstance(pipeline_facts, dict):
-        raise ValueError("provenance pipeline facts must be a JSON object")
-    group_keys = [
-        key
-        for key in getattr(args, "provenance_group_keys", "").split(",")
-        if key
-    ]
-    group_parts = (
-        PurePosixPath(getattr(args, "provenance_group_path", "")).parts
-        if group_keys
-        else ()
-    )
-    if len(group_keys) != len(group_parts):
-        raise ValueError("provenance group keys must match the grouped dump path")
-    if group_keys:
-        pipeline_facts = dict(pipeline_facts or {})
-        overlap = set(group_keys) & pipeline_facts.keys()
-        if overlap:
-            raise ValueError(f"provenance group keys already exist: {sorted(overlap)}")
-        pipeline_facts.update(zip(group_keys, group_parts))
-    digest_specs = [
-        spec
-        for spec in getattr(args, "provenance_digest_files", "").split(",")
-        if spec
-    ]
-    if digest_specs:
-        pipeline_facts = dict(pipeline_facts or {})
-        existing_digests = pipeline_facts.get("digests")
-        if existing_digests is not None and not isinstance(existing_digests, dict):
-            raise ValueError("provenance pipeline digests must be a JSON object")
-        digests = dict(existing_digests or {})
-        for spec in digest_specs:
-            name, separator, path = spec.partition("=")
-            if not separator or not name or not path or name in digests:
-                raise ValueError(f"invalid or duplicate provenance digest: {spec!r}")
-            digest = hashlib.sha256()
-            with open(path, "rb") as handle:
-                for block in iter(lambda: handle.read(8 * 1024 * 1024), b""):
-                    digest.update(block)
-            digests[name] = digest.hexdigest()
-        pipeline_facts["digests"] = digests
-
     do_rehydrate = args.rehydrate is not None and args.rehydrate.lower() in (
         "true",
         "1",
@@ -239,7 +171,6 @@ def main(args):
                 tokenizer_name_or_path=args.tokenizer_name_or_path,
                 eos_token=args.eos_token,
                 provenance=write_source_map,
-                provenance_pipeline=pipeline_facts,
                 batch_size=getattr(args, "tokenizer_batch_size", 10000),
             ),
         ],

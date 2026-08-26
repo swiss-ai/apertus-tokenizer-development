@@ -1,5 +1,4 @@
 import argparse
-import hashlib
 import tempfile
 import unittest
 from pathlib import Path
@@ -15,7 +14,7 @@ from tokenization_scripts import preprocess_megatron
 
 
 class Stackv31TokenizationTest(unittest.TestCase):
-    def test_selection_rank_slice_and_pipeline_facts_reach_the_map(self):
+    def test_selection_preserves_raw_source_rows_in_map(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             source = root / "source"
@@ -50,14 +49,6 @@ class Stackv31TokenizationTest(unittest.TestCase):
             tokenizer.pre_tokenizer = Whitespace()
             tokenizer.save(str(tokenizer_path))
             output = root / "tokens"
-            summary = root / "summary.json"
-            summary.write_text('{"complete":true}\n', encoding="utf-8")
-            manifest = root / "manifest.jsonl"
-            manifest.write_text('{"relative_path":"part.parquet"}\n', encoding="utf-8")
-            facts = {
-                "dataset": "stackv31-languages-v1",
-                "selection": {"policy_tag": "policy-v1"},
-            }
             preprocess_megatron.main(
                 argparse.Namespace(
                     tokenizer_name_or_path=str(tokenizer_path),
@@ -74,34 +65,13 @@ class Stackv31TokenizationTest(unittest.TestCase):
                     extension=".parquet",
                     include_boolean_column="apertus_include",
                     exclusion_reason_column="exclusion_reason",
-                    provenance_pipeline_json=facts,
-                    provenance_group_keys="language_category,language_slug",
-                    provenance_group_path="programming/python",
-                    provenance_digest_files=(
-                        f"artifact_summary={summary},artifact_manifest={manifest}"
-                    ),
                     tokenizer_batch_size=2,
                 )
             )
             token_map = read_token_map((output / "00000_tokens.map").read_bytes())
             self.assertEqual(list(token_map["records"]), [0, 2])
             self.assertEqual(token_map["manifest"]["sequence_count"], 2)
-            self.assertEqual(
-                token_map["manifest"]["pipeline"],
-                {
-                    **facts,
-                    "language_category": "programming",
-                    "language_slug": "python",
-                    "digests": {
-                        "artifact_summary": hashlib.sha256(
-                            summary.read_bytes()
-                        ).hexdigest(),
-                        "artifact_manifest": hashlib.sha256(
-                            manifest.read_bytes()
-                        ).hexdigest(),
-                    },
-                },
-            )
+            self.assertNotIn("pipeline", token_map["manifest"])
             self.assertEqual(token_map["manifest"]["text_column"], "content")
 
 

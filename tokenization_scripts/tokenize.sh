@@ -15,8 +15,7 @@ CONFIG_FILE=$1
 output_folder=$2
 logging_dir=$3
 paths_file=$4
-PROVENANCE_GROUP_PATH=${5:-}
-COMPLETED_DUMPS_FOLDER=${6:-$(dirname "$(dirname "$paths_file")")/completed-dumps}
+COMPLETED_DUMPS_FOLDER=${5:-$(dirname "$(dirname "$paths_file")")/completed-dumps}
 
 source "$CONFIG_FILE"
 
@@ -25,9 +24,6 @@ CSV_RESULTS_FILE=$PATH_TO_PREPROCESSING_METADATA/tokenize-$TOKENIZER_NAME-$DATAS
 ID_COLUMN=${ID_COLUMN:-id}
 INCLUDE_BOOLEAN_COLUMN=${INCLUDE_BOOLEAN_COLUMN:-}
 EXCLUSION_REASON_COLUMN=${EXCLUSION_REASON_COLUMN:-exclusion_reason}
-PROVENANCE_PIPELINE_JSON=${PROVENANCE_PIPELINE_JSON:-}
-PROVENANCE_GROUP_KEYS=${PROVENANCE_GROUP_KEYS:-}
-PROVENANCE_DIGEST_FILES=${PROVENANCE_DIGEST_FILES:-}
 TOKENIZER_BATCH_SIZE=${TOKENIZER_BATCH_SIZE:-10000}
 
 # Setup ENV
@@ -57,10 +53,6 @@ srun --environment="$ENV_FILE" \
   --rehydrate "$REHYDRATE_FLAG" \
   --include-boolean-column "$INCLUDE_BOOLEAN_COLUMN" \
   --exclusion-reason-column "$EXCLUSION_REASON_COLUMN" \
-  --provenance-pipeline-json "$PROVENANCE_PIPELINE_JSON" \
-  --provenance-group-keys "$PROVENANCE_GROUP_KEYS" \
-  --provenance-group-path "$PROVENANCE_GROUP_PATH" \
-  --provenance-digest-files "$PROVENANCE_DIGEST_FILES" \
   --tokenizer-batch-size "$TOKENIZER_BATCH_SIZE"
 
 end=$(date +%s)
