@@ -1,5 +1,7 @@
 import argparse
 import json
+import os
+import subprocess
 import tempfile
 import unittest
 from pathlib import Path
@@ -196,6 +198,102 @@ class Stackv31PlannerTest(unittest.TestCase):
         manifest_path.write_text(json.dumps(row) + "\n", encoding="utf-8")
         with self.assertRaisesRegex(ValueError, "conflicting categories"):
             self.prepare(1, "programming")
+
+    def test_standard_config_entrypoint_submits_the_grouped_run(self):
+        self.artifact(
+            {
+                "python": {
+                    "name": "Python",
+                    "category": "programming",
+                    "files": [(2, 1, 200, 100)],
+                }
+            }
+        )
+        config = self.root / "stackv31.cfg"
+        config.write_text(
+            "\n".join(
+                [
+                    f"TOKENIZER={self.tokenizer}",
+                    "TOKENIZER_NAME=test-tokenizer",
+                    "DATASET_NAME=stackv31-languages-v1",
+                    "COLUMN_KEY=content",
+                    "ID_COLUMN=content_id",
+                    f"PATH_TO_RAW_DATASET={self.input_root}",
+                    f"GROUP_MANIFEST={self.input_root / 'manifest.jsonl'}",
+                    f"CATEGORY_MAP={self.input_root / 'languages.json'}",
+                    f"PATH_TO_OUTPUT_FOLDER={self.output_root}",
+                    f"PATH_TO_PREPROCESSING_METADATA={self.work_root}",
+                    "OUTPUT_LAYOUT='{category}/{language_slug}'",
+                    "INCLUDE_BOOLEAN_COLUMN=apertus_include",
+                    "EXCLUSION_REASON_COLUMN=exclusion_reason",
+                    "EXPECTED_LANGUAGE_COUNT=1",
+                    "EXPECTED_CATEGORIES=programming",
+                    "EXPECTED_POLICY_TAG=policy-v1",
+                    "EXPECTED_SIGNALS_REVISION=signals-revision",
+                    "EXPECTED_SOURCE_REVISION=stack-source-revision",
+                    "EXPECTED_TOKENIZER_SHA256=",
+                    "TARGET_JOBS=1",
+                    "NUMBER_OF_DATATROVE_WORKERS=1",
+                    "TOKENIZER_BATCH_SIZE=2",
+                    "MAX_MAP_OVERHEAD=0.02",
+                    "MIXTURE_SAMPLER_PYTHON=/tmp/mixture-sampler/python",
+                    "ACCOUNT=infra01",
+                    "PARTITION=normal",
+                    "TIME=00:10:00",
+                    "CPUS_PER_TASK=4",
+                    "GPUS=0",
+                    "NODES=1",
+                    "NO_REQUEUE=--no-requeue",
+                ]
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        binary_dir = self.root / "bin"
+        binary_dir.mkdir()
+        calls = self.root / "sbatch.calls"
+        sbatch = binary_dir / "sbatch"
+        sbatch.write_text(
+            "#!/bin/bash\n"
+            "printf '%s\\n' \"$*\" >>\"$SBATCH_CALLS\"\n"
+            "if [[ \"$*\" == *stackv31_validate.sh* ]]; then\n"
+            "  echo 222\n"
+            "else\n"
+            "  echo 111\n"
+            "fi\n",
+            encoding="utf-8",
+        )
+        sbatch.chmod(0o755)
+        environment = dict(os.environ)
+        environment["PATH"] = f"{binary_dir}:{environment['PATH']}"
+        environment["SBATCH_CALLS"] = str(calls)
+        script = (
+            Path(__file__).parents[1]
+            / "tokenization_scripts"
+            / "tokenize_script.sh"
+        )
+        result = subprocess.run(
+            ["bash", str(script), str(config)],
+            capture_output=True,
+            text=True,
+            check=True,
+            env=environment,
+        )
+        submitted = calls.read_text(encoding="utf-8").splitlines()
+        self.assertEqual(len(submitted), 2)
+        self.assertIn("--array=0-0", submitted[0])
+        self.assertIn("stackv31_tokenize.sh", submitted[0])
+        self.assertIn("--dependency=afterok:111", submitted[1])
+        self.assertIn("stackv31_validate.sh", submitted[1])
+        self.assertIn("Tokenization array: 111", result.stdout)
+        self.assertIn("Validation: 222", result.stdout)
+        self.assertTrue(
+            (
+                self.work_root
+                / "test-tokenizer"
+                / stackv31.RUN_MANIFEST
+            ).is_file()
+        )
 
 
 if __name__ == "__main__":
