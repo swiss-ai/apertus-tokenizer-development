@@ -6,13 +6,13 @@ The exact recipe artifacts are bundled under [`training/`](training/): the four 
 
 ## 1. Reproduce
 
-1. Build the trainer. The parity-aware BPE trainer is implemented in Hugging Face `tokenizers` PR #1974 (https://github.com/huggingface/tokenizers/pull/1974). Check out that PR's branch and build the Python extension in release mode:
+1. Build the trainer. The parity-aware BPE trainer is merged into Hugging Face `tokenizers` (PR #1974, https://github.com/huggingface/tokenizers/pull/1974, merged 2026-07-09 as commit `0574112`), behind the `parity-aware-bpe` cargo feature, which the Python binding enables. As of 2026-07-19 no `tokenizers` release includes it yet, so check out `main` at or after that commit and build the Python extension in release mode (once a release includes the trainer, installing that release replaces this step):
    ```bash
    cd bindings/python
    maturin develop --release
    ```
    Use `--release`. `pip install -e .` and a plain `maturin develop` build the debug profile, which is unoptimized and about 10x slower at training, with no error or warning. A debug build of the extension is about 115 MB, a release build about 10 MB. See `bindings/python/README.md` in the tokenizers repository.
-2. Set up Python. Use a virtual environment with the release `tokenizers` extension installed (our environment uses `pa_venv`). Put the files from this repository's `training/` directory on that machine.
+2. Set up Python. Use a virtual environment with the release `tokenizers` extension installed. Put the files from this repository's `training/` directory on that machine.
 3. Point the configs at the datasets. The config paths use a `${DATA_ROOT}` placeholder (see Data); set it to where these datasets live in your environment.
 4. Train. From the directory holding `train_tokenizer.py`:
    ```bash
@@ -22,11 +22,11 @@ The exact recipe artifacts are bundled under [`training/`](training/): the four 
 5. Add the post-processor. The trained file has no BOS/EOS post-processor; add it for deployment (see Special tokens and post-processor).
 6. Verify. Compare against the deployed tokenizer (see Verification).
 
-We ran each variant as one SLURM job: `sbatch --wrap "python train_tokenizer.py --variant <KEY>"`, account `infra01`, `--mem=800G`, `--cpus-per-task=64`, and `--time=04:00:00` for the 131k tokenizers or `03:00:00` for the 200k (about 1.7 h on a release build), using the `pa_venv` Python.
+We ran each variant as one SLURM job: `sbatch --wrap "python train_tokenizer.py --variant <KEY>"`, account `infra01`, `--mem=800G`, `--cpus-per-task=64`, and `--time=04:00:00` for the 131k tokenizers or `03:00:00` for the 200k (about 1.7 h on a release build), using that virtual environment's Python.
 
 ## 2. Trainer
 
-The trainer is `ParityBpeTrainer` (in `src/models/bpe/`), implemented in Hugging Face `tokenizers` PR #1974 (https://github.com/huggingface/tokenizers/pull/1974). It is a byte-level BPE trainer with a hybrid global-then-parity merge schedule:
+The trainer is `ParityBpeTrainer` (in `src/models/bpe/`), merged into Hugging Face `tokenizers` via PR #1974 (https://github.com/huggingface/tokenizers/pull/1974). It is a byte-level BPE trainer with a hybrid global-then-parity merge schedule:
 
 - `window_size=100`, `alpha=2.0`, `total_symbols=True`.
 - Global phase: the first `gm` (`global_merges`) merges are chosen by data-weighted pooled frequency across all languages.
@@ -37,7 +37,9 @@ The driver `training/train_tokenizer.py` builds the normalizer, pretokenizer, an
 
 ## 3. Pretokenizer and normalizer
 
-NFC normalization, then a byte-level pretokenizer regex. `preliminary_mul` uses `clean_multi_plus3_repcap8`; the other three use `clean_multi_plus2_repcap8`. The `repcap8` guard caps a standalone run of 8 or more identical characters at 8 and excludes digit runs. The definitions are in `training/pretokenizer_regexes.py`. The rationale is in [apertus_tokenizer_design.md](apertus_tokenizer_design.md).
+NFC normalization, then a byte-level pretokenizer regex. `preliminary_mul` uses `clean_multi_plus3_repcap8`; the other three use `clean_multi_plus2_repcap8`. The `repcap8` guard caps a standalone run of 8 or more identical characters at 8. The definitions are in `training/pretokenizer_regexes.py`. The rationale is in [apertus_tokenizer_design.md](apertus_tokenizer_design.md).
+
+The guard differs in one detail across the shipped files. In `preliminary_enh`, `preliminary_euh`, and `preliminary_mul_200k` it excludes digit runs (`[^\s\p{N}]`), and the regex in each shipped `tokenizer.json` is byte-identical to the bundled definition. `preliminary_mul` was trained with an earlier form of the guard that does not exclude digit runs (`[^\s]`), so in that tokenizer a run of 8 or more identical digits forms an 8-character pre-token, and 12 multi-digit tokens are in its vocabulary (`00000000`, `99999999`, and the 4- and 2-character runs of 0, 1, 3, 6, 9). The bundled `clean_multi_plus3_repcap8` definition is the digit-excluding form, so retraining the `preliminary_mul` variant does not reproduce the shipped file byte-for-byte; the exact trained regex is embedded in `preliminary_mul/tokenizer.json`.
 
 ## 4. Special tokens and post-processor
 
@@ -60,9 +62,10 @@ The inputs are public datasets, with the multilingual data drawn from a quality-
 - European and other boosted families: a quality-filtered version of FineWeb-2 (`HuggingFaceFW/fineweb-2`), using our own quality and robots filtering. This filtered variant is our preprocessing, not a standard public release; it is not distributed here, so these families cannot be reproduced byte-for-byte without it.
 - Baseline per-language families: a per-language sample of FineWeb-2 (`HuggingFaceFW/fineweb-2`).
 - Code: StarCoder.
+- Math: FineMath-4+ and InfiMath samples (each config's `math` family, `quota_bytes` 419486271, about 0.42 GB).
 - Evaluation only (not training): FLORES-200 devtest.
 
-The config files under `training/configs/` reference paths under a `${DATA_ROOT}` placeholder; set it to where these datasets live before training. `preliminary_mul_200k`'s singletons family also lists a roughly 23 MB Korean subsample of the FineWeb-2 data.
+The config files under `training/configs/` reference paths under a `${DATA_ROOT}` placeholder; set it to where these datasets live before training. `preliminary_mul_200k`'s singletons family adds a roughly 23 MB Korean subsample of the FineWeb-2 data on top of the base singletons Korean, for about 120 MB of Korean in total (see the `preliminary_mul_200k` entry below).
 
 ## 6. Per-tokenizer recipes
 
@@ -78,13 +81,13 @@ Config files are `training/configs/parity_aware_config_grouped_fineweb2full_quot
 The exact per-family `quota_bytes`, `ratio`, and file lists are in the bundled config. The data character of each:
 
 - `preliminary_enh` (English-preserving). English 22 GB (the full FineWeb-1 sample); the European families (romance, germanic, slavic, baltic, celtic, uralic) about 3 GB each; plus an Arabic data and ratio fix.
-- `preliminary_euh` (EU-dense). English 22 GB; romance and germanic raised to 10 GB each, with French and German given a larger file share (`fra_Latn`, `deu_Latn`); baltic, celtic, and slavic 6 GB; Sinotibetan data cut.
+- `preliminary_euh` (European-boosted). English 22 GB; romance and germanic raised to 10 GB each, with French and German given a larger file share (`fra_Latn`, `deu_Latn`); baltic, celtic, and slavic 6 GB; Sinotibetan data cut.
 - `preliminary_mul` (most balanced, 131k). English 12.72 GB; slavic 2.77 GB, romance 2.39 GB, germanic 2.03 GB; code 1.47 GB; singletons 1.26 GB. Uses the `consv2` baseline with the `reparam` ratio adjustment and the `plus3` pretokenizer.
 - `preliminary_mul_200k` (Fr/De-strong, 200k). English 22 GB; romance and germanic 6 GB, with the French file share raised and Italian, Danish, Swedish, Dutch, and Polish trimmed; baltic, celtic, slavic 3 GB; Korean about 120 MB; Mandarin at its original about 135 MB; Arabic unchanged; code 1.47 GB StarCoder. The vocabulary is 200064 (128-aligned); ids 0 to 199999 are identical to the earlier 200000 build, with 64 tokens appended.
 
 ## 7. Verification
 
-Retrain a variant, add the post-processor, then compare the model against the deployed file. Load both `tokenizer.json` files and check that `model.vocab` and `model.merges` match. For `preliminary_mul_200k`, ids 0 to 199999 match the deployed 200064 file and the extra 64 are appended. A match shows the bundled config and driver reproduce the deployed tokenizer. The vocabulary lands at the target size exactly because of `total_symbols=True`.
+Retrain a variant, add the post-processor, then compare the model against the deployed file. Load both `tokenizer.json` files and check that `model.vocab` and `model.merges` match. For `preliminary_mul_200k`, ids 0 to 199999 match the deployed 200064 file and the extra 64 are appended. A match shows the bundled config and driver reproduce the deployed tokenizer. The vocabulary lands at the target size exactly because of `total_symbols=True`. This check applies to `preliminary_enh`, `preliminary_euh`, and `preliminary_mul_200k`. For `preliminary_mul`, the bundled regex differs from the shipped one in the repcap8 digit handling (section 3), so a retrain does not match the shipped file byte-for-byte.
 
 ## 8. Provenance
 

@@ -1,10 +1,24 @@
 # Internal working docs: present on disk for the local pipeline, not for public release
 RESTRUCTURING_PLAN.md
 REPORT_METADATA.md
-FEEDBACK.md
-apertus_team_pitch_deck.md
-SHORTCOMINGS.md
+RELEASE_OPEN_ITEMS.md
+
+# Superseded Apertus material moved out of the tokenizer-intrinsic-evals library
+# (2026-07-16). Kept on disk for reference, never tracked. Git is not its backup;
+# see archive/README.md for the snapshot that is.
+archive/
+
+# Live Apertus intrinsic-analysis panels, moved here 2026-07-16 from the library's
+# results/ so the generic library no longer holds Apertus-specific outputs. Large,
+# regenerable via scripts/run_report.sh, gitignored. NB: this results/ is the full
+# panels (JSON + plots); the top-level report_flores60/ and family_plots/ are the
+# older decoupled static-SVG copies the docs reference, and are separate.
+results/
 
 # Per-language plots are tracked as PNG only; the SVG copies stay local (regenerable
 # from make_per_language_plots.py). This does not affect the tracked report_*/ SVGs.
 per_language_*.svg
+
+# Python bytecode
+__pycache__/
+*.pyc

@@ -3,7 +3,8 @@
 Comparison of the four preliminary Apertus v2 tokenizers in this repository
 (`preliminary_mul`, `preliminary_enh`, `preliminary_euh`, `preliminary_mul_200k`),
 against the current production tokenizer **Apertus v1** and OpenAI's **o200k**
-(GPT-4o) as an external 200k reference. See [README.md](README.md) for the build
+(GPT-4o) as an external 200k reference; o200k has its own pretokenizer and no NFC
+normalizer, inherent to the comparison. See [README.md](README.md) for the build
 recipes and usage; intrinsic metrics here were computed with the SwissAI TokEval
 library.
 
@@ -11,7 +12,7 @@ The four candidates and their data character:
 
 | Candidate | vocab | character | source variant |
 |---|---|---|---|
-| `preliminary_mul_200k` **(recommended)** | **200064** | highest European and highest overall compression; compresses both high-resource and low-resource languages more than the 131k tokenizers | `eusino_v2c_frde_kr120` |
+| `preliminary_mul_200k` **(recommended)** | **200064** | European-focused with broad multilingual coverage: highest European compression, and compresses the low-resource languages more than the 131k tokenizers | `eusino_v2c_frde_kr120` |
 | `preliminary_mul` | 131072 | most balanced and fairest; highest compression on Indic languages, Chinese, and the low-resource tail | `consv2_reparam` |
 | `preliminary_enh` | 131072 | highest English compression of the 131k tokenizers | `engfull_eu3` |
 | `preliminary_euh` | 131072 | highest European compression of the 131k tokenizers; compresses Chinese less | `frde2` |
@@ -26,17 +27,17 @@ European compression of the set (EU average 4.245 bytes/token on FLORES, against
 and the smallest worst-language penalty: the worst-served language needs 3.61x as
 many tokens as English on the same text, against 14.70x for Apertus v1. English
 compression is close to the other candidates (FineWeb-Edu 4.510 bytes/token,
-1.8% below Apertus v1). German compresses more than under Apertus v1 and French
-is about the same.
+1.8% below Apertus v1). It compresses German more than Apertus v1, and French
+about the same.
 
-The cost is the vocabulary size. At 200064 it is 53% larger than the 131072 of
+At 200064, the vocabulary is 53% larger than the 131072 of
 Apertus v1 and the other three candidates, which enlarges the embedding and
 output tables by the same proportion, with the parameter count and memory that
 implies. A larger vocabulary raises compression across the board, so the numbers
 above are not a like-for-like comparison with the 131k candidates; the
 size-matched comparison is OpenAI's o200k (200000, against this build's 200064). Against o200k it
 compresses English about 6% less but compresses the low-resource tail far more
-(Tibetan 0.0178 vs 0.0048 sentences per token), is roughly 2x fairer across 205
+(Tibetan 0.0172 vs 0.0048 sentences per token), is roughly 2x fairer across 205
 languages, and has 17 junk tokens against 255. Its lower vocabulary-utilization
 figures are the same size effect (more slots, so a smaller used fraction), not a
 defect. It has the same template processing and special tokens as the other three
@@ -46,7 +47,7 @@ If a 131k vocabulary is required (to match Apertus v1's embedding table), the
 three 131k candidates each lead on one axis:
 
 - **`preliminary_euh`** has the highest European compression at 131k (EU average
-  3.937 bytes/token, +4.0% vs Apertus v1; German 4.332 vs 4.238 chars/token). It
+  3.937 chars/token, +4.0% vs Apertus v1; German 4.332 vs 4.238 chars/token). It
   compresses Chinese 17% less than Apertus v1 (Mandarin 0.917 vs 1.108) and is
   the least fair of the four (Gini 0.138 / 0.122 on FLORES60 / FLORES200, still
   fairer than Apertus v1). The fit when European compression is the priority and
@@ -57,35 +58,33 @@ three 131k candidates each lead on one axis:
   broad multilingual fairness, rather than European compression, is the goal.
 - **`preliminary_enh`** compresses English the most of the 131k candidates
   (FineWeb-Edu 4.486 bytes/token, 2.4% below Apertus v1) and keeps most of the
-  multilingual and fairness gains. European languages compress less than under
-  Apertus v1. The fit when English compression is the priority.
+  multilingual and fairness gains. European languages are compressed less than
+  under Apertus v1. The fit when English compression is the priority.
 
-Trained-LM (extrinsic) results are in §6 for `preliminary_enh` and
-`preliminary_euh`; all three 131k candidates were trained on their exact shipped
-tokenizer, and the full downstream panel (including `preliminary_mul`) is in
-REPORT.md. The 200k candidate is left out of the §6 comparison because its
-vocabulary size confounds a like-for-like reading.
+Trained-LM (extrinsic) results for all four candidates are in §6 (with the
+tokenizer-identity caveats noted there), and the full downstream panel is in
+[DEVELOPMENT_RECORD.md](DEVELOPMENT_RECORD.md).
 
 Compression cells in §1 show `(% diff vs Apertus v1)`. Higher sent/tok and
-higher bytes/token are better.
+higher bytes/token are better. In tables, bold marks the best value in a column.
 
 ## 1. Compression: four corpora
 
 `sent/tok` is FLORES sentences (lines) per token (higher = more compressed).
 `b/t` is bytes per token (higher = more compressed). FineWeb2-proportional is a
-7.5 MB multilingual sample (seed 0) drawn across 22 families with per-family
-shares matching the natural FineWeb2 byte distribution; all tokenizers measured
-on the identical sample. `FLORES EU b/t` is bytes/token over the ten EU languages
+6.3 MB multilingual sample (207 files, seed 0) drawn across 22 families with
+per-family shares matching the natural FineWeb2 byte distribution; all tokenizers
+measured on the identical sample. `FLORES EU b/t` is bytes/token over the ten EU languages
 (deu/fra/spa/ita/por/nld/swe/pol/ron/dan) on FLORES.
 
 | Tokenizer | FLORES60 sent/tok ↑ | FLORES200 sent/tok ↑ | FineWeb-Edu English b/t ↑ | FineWeb2-proportional b/t ↑ | FLORES EU b/t ↑ |
 |---|---|---|---|---|---|
-| Apertus v1 | 0.0198 | 0.0142 | 4.595 | 3.077 | 3.865 |
-| preliminary_mul | 0.0235 (+18.7%) | 0.0202 (+42.3%) | 4.333 (−5.7%) | **3.796 (+23.4%)** | 3.780 (−2.2%) |
-| preliminary_enh | 0.0223 (+12.6%) | 0.0199 (+40.1%) | 4.486 (−2.4%) | 3.621 (+17.7%) | 3.850 (−0.4%) |
-| preliminary_euh | 0.0219 (+10.6%) | 0.0195 (+37.3%) | 4.424 (−3.7%) | 3.559 (+15.7%) | 4.041 (+4.6%) |
-| **preliminary_mul_200k** | **0.0239 (+20.7%)** | **0.0207 (+45.8%)** | 4.510 (−1.8%) | 3.791 (+23.2%) | **4.245 (+9.8%)** |
-| *o200k (200k ref)* | 0.0239 | 0.0176 | **4.786** | 3.533 | 4.040 (+4.5%) |
+| Apertus v1 | 0.0198 | 0.0142 | 4.595 | 3.061 | 3.865 |
+| preliminary_mul | 0.0235 (+18.7%) | 0.0202 (+42.3%) | 4.333 (−5.7%) | **3.807 (+24.4%)** | 3.780 (−2.2%) |
+| preliminary_enh | 0.0223 (+12.6%) | 0.0199 (+40.1%) | 4.486 (−2.4%) | 3.632 (+18.7%) | 3.850 (−0.4%) |
+| preliminary_euh | 0.0219 (+10.6%) | 0.0195 (+37.3%) | 4.424 (−3.7%) | 3.568 (+16.6%) | 4.041 (+4.6%) |
+| **preliminary_mul_200k** | **0.0239 (+20.7%)** | **0.0207 (+45.8%)** | 4.510 (−1.8%) | 3.801 (+24.2%) | **4.245 (+9.8%)** |
+| *o200k (200k ref)* | 0.0239 | 0.0176 | **4.786** | 3.519 | 4.040 (+4.5%) |
 
 All four candidates compress the multilingual sets much more than Apertus v1,
 and compress English a few percent less. Among the 131k candidates,
@@ -160,8 +159,8 @@ effect described above, not waste: it uses more tokens in absolute terms.
 o200k has 255 decorative-run/glitch tokens, against 17 for each candidate.
 
 Utilization here is the raw fraction of vocabulary ids used (used / vocab size).
-The main REPORT.md decision table excludes special and reserved tokens from the
-denominator, so its Apertus v1 figure (0.561) sits slightly above the 0.556 shown
+The candidate table in DEVELOPMENT_RECORD.md excludes special and reserved tokens
+from the denominator, so its Apertus v1 figure (0.561) sits slightly above the 0.556 shown
 here; the candidate figures, with far fewer special tokens, agree to within 0.001.
 
 Per-language vocabulary utilization (the raw count of distinct vocabulary ids
@@ -177,47 +176,64 @@ Hindi (2394) of the candidates, from its larger vocabulary.
 
 ### 3.1 Vocabulary-usage breakdown and scaffold tokens
 
-Each merge-created token is run over a fixed corpus (FLORES dev, FineMath-4+, and
-StarCoder python+javascript) and placed by how often it is emitted on its own.
-The four buckets partition the merge vocabulary (they sum to 100%, excluding the
-124 special tokens): Active (standalone rate at or above 5 per million), Rare
-(1 to 5 per million), Uncommon (below 1 per million but produced at least once),
-and Unseen (never produced in any role on this corpus). Scaffold is an overlay,
-not a fifth bucket: the Uncommon-or-Rare tokens that surface as a standalone
-token in fewer than 10% of the times they are built, so they act mostly as a
-merge step toward tokens that do surface. Scaffold counts rarely-exercised
-embedding capacity that is structurally needed to build the tokens that do
-surface; it is not removable waste (distinct from the junk and dead-vocabulary
-metrics).
+Each merge-created token (the 256-byte base alphabet and the 124 special tokens
+excluded) is run over a fixed corpus: a 49.2 MB FineWeb sample drawn over the
+FLORES-200 language set at an equal byte budget per language (214,285 bytes,
+seed 0; FineWeb2 per language, English from FineWeb-1, which is where English
+lives; 210 of 210 languages returned text, 6 of them under budget), plus
+FineMath-4+ and StarCoder (Python and JavaScript). Two per-token
+rates are measured. The standalone rate is how often the token is emitted as a
+final token, per million final tokens on the corpus. The survival rate is how
+often it is emitted as a final token divided by how often it is built at all
+(built = emitted as a final token, plus formed as an intermediate step and then
+merged into something larger).
 
+The four buckets partition the merge vocabulary (they sum to 100%): Active
+(standalone rate at or above 5 per million), Rare (1 to 5 per million), Uncommon
+(above 0 but below 1 per million), and Unseen (built zero times on this corpus,
+in any role). Scaffold is an overlay on the Rare and Uncommon tokens, not a fifth
+bucket: a token counts as scaffold if it is emitted on its own in fewer than 10%
+of the times it is built (survival below 0.1). A scaffold token is one the
+tokenizer builds mostly as an intermediate step toward a larger token, not as an
+output on its own. In `preliminary_enh`, for example, `ould` is emitted alone 9
+times but built 7,253 times, almost always inside ` would`. Scaffold tokens are
+structurally needed to build the tokens that do surface; they are not removable
+waste (distinct from the junk and dead-vocabulary metrics).
+
+<!-- BEGIN TABLE: vocab-usage -->
 | Tokenizer | Merge tokens | Active % | Rare % | Uncommon % | Unseen % | Scaffold % | Scaffold count |
 |---|---|---|---|---|---|---|---|
-| Apertus v1 | 129,816 | 12.9 | 23.7 | 49.3 | 14.0 | 4.66 | 6,049 |
-| preliminary_mul | 130,692 | 15.7 | 29.3 | 48.5 | 6.5 | 3.06 | 3,999 |
-| preliminary_enh | 130,692 | 16.5 | 28.2 | 45.5 | 9.8 | 2.89 | 3,777 |
-| preliminary_euh | 130,692 | 16.3 | 25.2 | 46.7 | 11.8 | 2.93 | 3,829 |
-| preliminary_mul_200k | 199,620 | 10.6 | 20.9 | 51.5 | 17.0 | 3.56 | 7,106 |
-| *o200k (200k ref)* | 199,742 | 10.2 | 23.2 | 48.4 | 18.1 | 2.94 | 5,872 |
+| Apertus v1 | 129,816 | 13.62 | 26.54 | 52.53 | 7.30 | 3.49 | 4,531 |
+| preliminary_mul | 130,692 | 15.38 | 31.21 | 50.21 | 3.19 | 2.80 | 3,659 |
+| preliminary_enh | 130,692 | 16.30 | 31.89 | 47.23 | 4.58 | 2.39 | 3,124 |
+| preliminary_euh | 130,692 | 16.26 | 28.73 | 49.13 | 5.88 | 2.40 | 3,137 |
+| preliminary_mul_200k | 199,684 | 10.33 | 22.73 | 57.76 | 9.17 | 3.07 | 6,130 |
+| *o200k (200k ref)* | 199,742 | 10.34 | 24.74 | 53.99 | 10.94 | 2.53 | 5,053 |
+<!-- END TABLE: vocab-usage -->
 
-At 131k the three candidates have a lower scaffold share than Apertus v1 (2.89 to
-3.06% against 4.66%, or 3,777 to 3,999 tokens against 6,049) and fewer Unseen
-tokens (6.5 to 11.8% against 14.0%), so more of their vocabulary is exercised on
-this corpus. `preliminary_mul_200k` has a 3.56% scaffold share, which is 7,106
-tokens: the percentage is between Apertus v1 and the 131k candidates, but the
-absolute count is higher because the vocabulary is 53% larger. Its Unseen share
-(17.0%) is the largest of the candidates, the same vocabulary-size effect as its
-lower utilization in the table above (more slots, so a larger fraction goes
-unused on a fixed corpus); o200k, also 200k, is similar (18.1% Unseen, 2.94%
-scaffold). Byte-fragment tokens are a small part of every scaffold count (0.26 to
-0.57% of the merge vocabulary).
+At 131k the three candidates have a lower scaffold share than Apertus v1 (2.39 to
+2.80% against 3.49%, or 3,124 to 3,659 tokens against 4,531). Their Active shares
+are higher (15.38 to 16.30% against 13.62%) and their Unseen shares are lower
+(3.19 to 5.88% against 7.30%): more of their vocabulary is exercised by this
+corpus. `preliminary_mul_200k` has a 3.07% scaffold share, close to the 131k
+candidates in percentage but 6,130 tokens in absolute count because the
+vocabulary is 53% larger. Its Unseen share (9.17%) is higher than any 131k
+tokenizer, which is the expected size effect: with 200k slots and a fixed corpus
+a larger fraction of the vocabulary goes unused. Against the size-matched
+reference it is still the lower of the two (o200k, also about 200k, has 10.94%
+Unseen and a 2.53% scaffold share). Byte-fragment tokens are a small part of
+every scaffold count (0.27 to 0.57% of the merge vocabulary across the six
+tokenizers here).
 
 ## 4. Code-structure metrics
 
 AST full-alignment is the fraction of AST-node spans whose token boundaries
-match on both ends across the StarCoder sample; operator isolation is the
-fraction of arithmetic operators emitted as standalone tokens.
+match on both ends across the StarCoder sample. Operator isolation is the
+fraction of operators emitted as standalone tokens; the column below is measured
+on natural-language text (the 13 core languages), where the clean regex's
+punctuation arm fires on nearly every operator.
 
-| Tokenizer | AST full-alignment ↑ | Operator isolation ↑ |
+| Tokenizer | AST full-alignment ↑ | Operator isolation (prose) ↑ |
 |---|---|---|
 | Apertus v1 | 0.488 | 0.373 |
 | preliminary_mul | **0.689** | **0.991** |
@@ -226,9 +242,17 @@ fraction of arithmetic operators emitted as standalone tokens.
 | preliminary_mul_200k | 0.681 | 0.990 |
 | *o200k (200k ref)* | 0.463 | 0.354 |
 
-All four candidates align to code structure much better than Apertus v1 and
-o200k. Apertus v1 and o200k merge operators into surrounding tokens (operator
-isolation 0.35 to 0.37) and align to AST boundaries less often.
+The candidates align to AST boundaries more often than Apertus v1 and o200k
+(0.68 against 0.46 to 0.49), on the real StarCoder sample. The operator-isolation
+column separates them too, but that separation is a property of prose: measured
+on code, where operators are usually space-delimited, the same metric puts the
+families much closer (Apertus 0.40, candidates 0.51 to 0.52, a gap of about 0.12
+against the 0.62 prose gap). So the code-structure claim that holds here is the
+AST alignment; operator isolation reflects the same regex difference (the clean
+regex splits punctuation off adjacent characters) but is not by itself a
+code-corpus measurement. One caution on the metric: isolation can be pushed to
+1.0 by shattering compound operators, which a pure-punctuation regex does
+(splitting `>=` into `>` `=`), so higher is not always better.
 
 ## 5. Encode throughput
 
@@ -238,82 +262,95 @@ Hugging Face `tokenizers` Rust backend (`encode_batch`,
 `add_special_tokens=False`, `RAYON_NUM_THREADS=1`), reported as the minimum over
 11 timed repeats after warmup. Throughput is input bytes divided by encode time,
 with MB = 10^6 bytes of input UTF-8 text. Numbers are single-core on a shared
-login node, so absolute values carry roughly 10% run-to-run variance; the
-relative ordering is stable. All five tokenizers use `ignore_merges=True`.
+login node, so absolute values vary roughly 10% run to run; treat
+differences of a few percent as noise rather than a tokenizer effect.
 
-| Tokenizer | Vocab | Encode MB/s |
-|---|---|---|
-| Apertus v1 | 131072 | 3.42 |
-| preliminary_mul | 131072 | 3.04 |
-| preliminary_enh | 131072 | 3.08 |
-| preliminary_euh | 131072 | 2.97 |
-| preliminary_mul_200k | 200064 | 3.07 |
+<!-- BEGIN TABLE: throughput -->
+| Tokenizer | Vocab | Ships `ignore_merges` | Encode MB/s |
+|---|---|---|---|
+| Apertus v1 | 131072 | true | 3.66 |
+| preliminary_mul | 131072 | true | 3.25 |
+| preliminary_enh | 131072 | true | 3.34 |
+| preliminary_euh | 131072 | true | 3.32 |
+| preliminary_mul_200k | 200064 | true | 3.34 |
+| *o200k (200k ref)* | 200000 | **false** | 3.05 |
+<!-- END TABLE: throughput -->
 
-The four candidates were changed to `ignore_merges=True` (they previously shipped
-with it off, like the rest of the training-library default; Apertus v1 already
-had it on). On the candidates this raised single-core encode throughput by 1.11x
-to 1.13x and produced identical token ids on both the English snippet (1000
-documents) and a 10-language FLORES sample (9970 lines), so it changed encode
-speed only, not tokenization. The candidates encode at 2.97 to 3.08 MB/s; the
-remaining difference from Apertus v1 (3.42) is the pretokenizer regex, which does
-more work per byte than the Apertus v1 pretokenizer. The 200k vocabulary does not
-lower throughput here: `preliminary_mul_200k` matches the 131k candidates.
+All four candidates now ship `ignore_merges=true` (they were built with it off,
+like the rest of the training-library default; Apertus v1 already had it on).
+The flag changes encode speed only, not tokenization: on this build it produced
+identical token ids across all 211 FLORES languages, code, and Unicode edge
+cases (emoji sequences, ligatures, combining marks, fullwidth and zero-width
+characters).
 
-## 6. Extrinsic: 1B-parameter LM (131k candidates)
+`preliminary_mul_200k` was the last one still shipping with the flag off, and it
+was turned on 2026-07-19. Its encode throughput went from 3.03 to 3.34 MB/s, a
+1.10x gain, which brings it level with the 131k candidates instead of last. The
+previous file is kept alongside it as
+`tokenizer.json.bak_ignore_merges_false_2026-07-19`.
 
-All three 131k candidates have a directly-attributable trained LM whose training
-tokenizer is byte-identical (vocabulary and encoding) to the shipped
-`tokenizer.json`: `preliminary_enh`, `preliminary_euh`, and `preliminary_mul`.
-`preliminary_mul` was trained on the `prelim-mul-v131072` run, whose
-training-tokenizer sha256 matches the shipped `preliminary_mul`; an earlier proxy
-run (`consv2-plus3-repcap8`, vocabulary 131017, sharing 123,455 of 131,072 tokens)
-is superseded by it. The main results for all three are below; the full
-per-tokenizer panel is in REPORT.md.
+The candidates encode at 3.25 to 3.34 MB/s against Apertus v1's 3.66. The
+remaining difference from Apertus v1 is the pretokenizer regex, which does more
+work per byte. Vocabulary size is not the driver: the size-matched o200k
+reference encodes at 3.05 MB/s, slower than every candidate, though it is the one
+tokenizer here still without the flag so its figure is not directly comparable.
+These are single-core numbers on a shared node: the candidates' spread (3.25 to
+3.34) is within the run-to-run variance quoted above and should not be read as an
+ordering between them.
 
-`preliminary_mul_200k` was trained and evaluated downstream as well, but its
-results are not presented here as a like-for-like comparison. A different
-vocabulary size changes the parameter count (the embedding and output tables) and
-therefore the compute-optimal (Chinchilla/Kaplan) training-token budget, so a
-fair head-to-head against the 131k runs would need a re-tuned training setup, not
-the same token budget. Its training recipe is otherwise the same family as the
-131k candidates, closest to `preliminary_euh` (same `plus2` pretokenizer and
-Fr/De-boosted European `consv2` data), differing mainly in vocabulary size (and
-in keeping more Chinese and tail-language data than `euh`, which cut it). The
-extrinsic vetting of the 131k candidates below, `preliminary_euh` in particular,
-therefore serves as a proxy for the 200k candidate's downstream behavior.
+## 6. Extrinsic: 1B-parameter LM
+
+Each candidate's LM was trained on the same learned merges as its shipped
+tokenizer, so the numbers below apply to the shipped tokenizer's tokenization of
+real text. On exact identity: `preliminary_mul` is byte-identical to its shipped
+file; `preliminary_enh` and `preliminary_euh` differ from theirs only in
+special-token metadata (the merges are identical); `preliminary_mul_200k` used the
+vocab-200000 predecessor of the shipped 200064-token build (ids 0 to 199999
+identical, 64 merges appended in the shipped build). `preliminary_mul_200k`'s
+larger vocabulary also makes its downstream numbers not a like-for-like comparison
+with the 131k rows: a larger vocabulary changes the parameter count (embedding and
+output tables) and the compute-optimal training-token budget. Its recipe is
+otherwise the same family as `preliminary_euh` (same `plus2` pretokenizer and
+Fr/De-boosted `consv2` data). The full per-tokenizer panel is in DEVELOPMENT_RECORD.md.
 
 Protocol: nanochat GPT, depth-24 (~1B parameters), muP. Two training regimes per
-tokenizer: a standard multilingual mix to about 9B tokens, and a from-scratch 20B
-math+code mix (`mathcode-scratch`). Evaluations: downstream LM FLORES BPB over 214
-languages (BPB is normalized per byte, so it compares across tokenizers), BLiMP,
+tokenizer: a standard multilingual mix to about 10B tokens, and a from-scratch 20B
+math+code mix (`mathcode-scratch`). Evaluations: validation BPB, downstream LM
+FLORES BPB on the 31 training languages (BPB is normalized per byte, so it
+compares across tokenizers), Code BPB, BLiMP, MultiBLiMP,
 Belebele (31 languages), MGSM, GSM8K, HumanEval (0-shot), MBPP (3-shot), and
-MC-math (k=5, 500 examples per dataset). One seed per tokenizer.
+MC-math (k=5, 500 examples per dataset). One seed per tokenizer. Metric
+definitions are in DEVELOPMENT_RECORD.md.
 
-BPB, BLiMP, and Belebele are from the standard 9B run; MC-math, GSM8K, HumanEval,
-and MBPP are from the 20B math+code run (`mathcode-scratch`). The full
-per-tokenizer panel (every metric, every tokenizer, and the 10B-vs-20B
-justification) is in REPORT.md.
+Validation BPB, FLORES BPB, Code BPB, BLiMP, MultiBLiMP, MGSM, and Belebele are
+from the standard 10B run; MC-math, GSM8K, HumanEval, and MBPP are from the 20B
+math+code run (`mathcode-scratch`). This is the same metric set and the same
+values as the full per-tokenizer panel in DEVELOPMENT_RECORD.md (which also has
+every tokenizer and the 10B-vs-20B justification). All values are read directly
+from the run outputs.
 
-| Metric | `preliminary_enh` | `preliminary_euh` | `preliminary_mul` |
-|---|---|---|---|
-| Validation BPB ↓ | 0.725 | 0.725 | 0.728 |
-| LM FLORES BPB (214 lang) ↓ | 2.982 | 2.979 | 2.965 |
-| BLiMP acc ↑ | 0.820 | 0.820 | 0.814 |
-| Belebele acc ↑ | 0.240 | 0.256 | 0.249 |
-| MC-math ↑ | 0.273 | 0.279 | 0.285 |
-| GSM8K strict (≤500) ↑ | 0.228 | 0.224 | 0.210 |
-| HumanEval pass@1 ↑ | 0.079 | 0.116 | 0.024 |
-| MBPP pass@1 ↑ | 0.154 | 0.102 | 0.170 |
+| Metric | `preliminary_enh` | `preliminary_euh` | `preliminary_mul` | `preliminary_mul_200k` |
+|---|---|---|---|---|
+| Validation BPB ↓ | 0.725 | 0.725 | 0.728 | 0.720 |
+| FLORES BPB (31 trained lang) ↓ | 1.164 | 1.167 | 1.167 | 1.163 |
+| Code BPB ↓ | 0.529 | 0.532 | 0.531 | 0.524 |
+| BLiMP acc ↑ | 0.820 | 0.820 | 0.814 | 0.821 |
+| MultiBLiMP acc ↑ | 0.911 | 0.915 | 0.919 | 0.917 |
+| MGSM ↑ | 0.016 | 0.011 | 0.014 | 0.010 |
+| Belebele acc ↑ | 0.240 | 0.256 | 0.249 | 0.263 |
+| MC-math ↑ | 0.273 | 0.279 | 0.285 | 0.247 |
+| GSM8K flex (≤500) ↑ | 0.242 | 0.236 | 0.240 | 0.240 |
+| HumanEval pass@1 ↑ | 0.079 | 0.116 | 0.024 | 0.073 |
+| MBPP pass@1 ↑ | 0.154 | 0.102 | 0.170 | 0.206 |
 
-The three 131k candidates are close on general modeling: validation BPB 0.725 to
-0.728, LM FLORES BPB 2.965 to 2.982 (`preliminary_mul` lowest), and BLiMP 0.814 to
-0.820. The math and code numbers are small, single-seed, computed on at most 500
-examples with wide confidence intervals, and do not point one way: `preliminary_mul`
-is highest on MBPP (0.170) and MC-math (0.285), `preliminary_euh` on HumanEval
-(0.116), `preliminary_enh` on GSM8K (0.228). At this model size and token budget
-there is no consistent downstream separation; the choice among them rests on the
-intrinsic compression profile (English for `preliminary_enh`, European for
-`preliminary_euh`, balanced for `preliminary_mul`), not on these extrinsic numbers.
+The four candidates are close on general modeling: validation BPB 0.720 to 0.728,
+FLORES BPB 1.163 to 1.167, and BLiMP 0.814 to 0.821. The math and code numbers are
+small, single-seed, computed on at most 500 examples with wide confidence
+intervals, and do not point one way: `preliminary_mul_200k` is highest on MBPP
+(0.206), `preliminary_mul` on MC-math (0.285), `preliminary_euh` on HumanEval
+(0.116), `preliminary_enh` on GSM8K (0.242). At this model size and token budget
+there is no consistent downstream separation; the choice rests on the intrinsic
+compression profile, not on these extrinsic numbers.
 
 ## Takeaways
 
@@ -323,7 +360,7 @@ intrinsic compression profile (English for `preliminary_enh`, European for
   chars/token) and the smallest worst-language penalty (3.61x), while keeping the
   low-resource tail (Indic 2.759, Mandarin 1.149, Tibetan 2.518 chars/token). It
   compresses both the high-resource and low-resource languages more than the 131k
-  candidates do. The cost is the larger embedding/output table (200064 vs 131072).
+  candidates do. The larger vocabulary means a larger embedding and output table (200064 vs 131072).
   Against the size-matched o200k it compresses English about 6% less, is roughly
   2x fairer across 205 languages, compresses the low-resource tail far more, and
   has 17 junk tokens against 255.
@@ -335,15 +372,9 @@ intrinsic compression profile (English for `preliminary_enh`, European for
 - **`preliminary_enh`** (131k): English focus. Highest English compression of the
   131k candidates (4.486 bytes/token, 2.4% below Apertus v1), keeping most of the
   multilingual and fairness gains. Indic and Chinese are lower than
-  `preliminary_mul`. EU languages compress less than under Apertus v1.
+  `preliminary_mul`. EU languages are compressed less than under Apertus v1.
 - **`preliminary_euh`** (131k): highest EU compression of the 131k candidates
-  (EU-avg 3.937; German and French much improved). Chinese gets less vocabulary,
-  so Mandarin drops to 0.917, **below Apertus v1's 1.108 (−17%)**. By Gini it is
+  (EU-avg 3.937; German +2.2%, French about the same at −2.2%). It allocates less vocabulary to
+  Chinese, so Mandarin drops to 0.917, **below Apertus v1's 1.108 (−17%)**. By Gini it is
   the least fair of the four candidates. Appropriate if European compression is
   the priority and Chinese can be deprioritized.
-
-Notes: FineWeb2-proportional is a 7.5 MB sample (seed 0; all tokenizers on the
-identical sample), so its Apertus value (3.077) differs slightly from earlier
-6.3 MB runs (3.061). o200k has its own pretokenizer and no NFC normalizer
-(inherent to the comparison). Trained-LM (extrinsic) results for the 131k
-candidates are in §6.

@@ -12,4 +12,4 @@ Recipe artifacts for reproducing the `preliminary_*` tokenizers. See [../TRAININ
 - `pretokenizer_regexes.py` holds the `clean_multi_plus2_repcap8` and `clean_multi_plus3_repcap8` pretokenizer definitions.
 - `apertus_special_tokens.json` is the 124 special tokens (`sp124`), ids 0 to 123.
 
-The Rust `ParityBpeTrainer` is not bundled here; it lives in the tokenizers fork (see ../TRAINING.md, Trainer).
+The Rust `ParityBpeTrainer` is not bundled here; it is merged into Hugging Face `tokenizers` (see ../TRAINING.md, Trainer).
