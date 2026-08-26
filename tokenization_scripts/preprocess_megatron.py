@@ -1,8 +1,10 @@
+#!/usr/bin/env python3
 """
 python3 preprocess_megatron.py --tokenizer-name-or-path meta-llama/Meta-Llama-3-8B --output-folder tokenized_datasets/fineweb-edu --n-tasks 16 --dataset datasets/fineweb-edu/raw-dataset-link --paths-file datasets/fineweb-edu/dumps/paths_file_0.txt
 """
 
 import argparse
+import json
 
 from data_pipeline_pretrain.pipeline.tokens import (
     MegatronDocumentTokenizer,
@@ -56,6 +58,18 @@ def get_args():
         default=-1,
         help="Number of workers executing concurrently --n-tasks tasks. Default: -1, which means --n-workers==--n-tasks",
     )
+    group.add_argument(
+        "--local-tasks",
+        type=int,
+        default=-1,
+        help="Number of this run's tasks to execute. Default: all tasks",
+    )
+    group.add_argument(
+        "--rank-offset",
+        type=int,
+        default=0,
+        help="First global task rank executed by this run. Default: 0",
+    )
     group = parser.add_argument_group(title="Dataset configs")
     group.add_argument(
         "--dataset",
@@ -76,6 +90,11 @@ def get_args():
         help="Column to preprocess from the Dataset. Default: text",
     )
     group.add_argument(
+        "--id-column",
+        default="id",
+        help="Column used as the document id. Default: id",
+    )
+    group.add_argument(
         "--rehydrate",
         type=str,
         default="False",
@@ -86,6 +105,27 @@ def get_args():
         type=str,
         default=".parquet",
         help="File extension to use. e.g. .parquet or .jsonl.zst. Default: .parquet",
+    )
+    group.add_argument(
+        "--include-boolean-column",
+        default="",
+        help="Optional boolean metadata column deciding which rows are tokenized",
+    )
+    group.add_argument(
+        "--exclusion-reason-column",
+        default="exclusion_reason",
+        help="Metadata column explaining excluded rows",
+    )
+    group.add_argument(
+        "--provenance-pipeline-json",
+        default="",
+        help="Optional declared pipeline facts recorded in every token .map",
+    )
+    group.add_argument(
+        "--tokenizer-batch-size",
+        type=int,
+        default=10000,
+        help="Documents encoded in one tokenizer batch. Default: 10000",
     )
 
     args = parser.parse_args()
@@ -98,14 +138,25 @@ def main(args):
     # Check number of files > n tasks
     with open(args.paths_file, "rb") as f:
         number_of_files = sum(1 for _ in f)
-    if n_tasks > number_of_files:
-        n_tasks = number_of_files
+    n_tasks = min(n_tasks, number_of_files)
+    if n_tasks < 1:
+        raise ValueError("paths file contains no inputs")
+
+    local_tasks = getattr(args, "local_tasks", -1)
+    rank_offset = getattr(args, "rank_offset", 0)
+    if local_tasks == -1:
+        local_tasks = n_tasks
+    if local_tasks < 1 or rank_offset < 0 or rank_offset + local_tasks > n_tasks:
+        raise ValueError(
+            "local task range must be non-empty and contained in the global tasks"
+        )
 
     if "jsonl" in args.extension:
         reader = JsonlReader(
             data_folder=args.dataset,
             paths_file=args.paths_file,
             text_key=args.column,
+            id_key=getattr(args, "id_column", "id"),
         )
         write_source_map = False
     else:
@@ -113,8 +164,30 @@ def main(args):
             data_folder=args.dataset,
             paths_file=args.paths_file,
             text_key=args.column,
+            id_key=getattr(args, "id_column", "id"),
         )
         write_source_map = True
+
+    include_column = getattr(args, "include_boolean_column", "")
+    if include_column and not write_source_map:
+        raise ValueError("row selection is only supported for Parquet inputs")
+    selection_steps = []
+    if include_column:
+        from data_pipeline_pretrain.pipeline.filters import ApertusCodeLicenseFilter
+
+        selection_steps.append(
+            ApertusCodeLicenseFilter(
+                include_column=include_column,
+                reason_column=getattr(
+                    args, "exclusion_reason_column", "exclusion_reason"
+                ),
+            )
+        )
+    pipeline_facts = getattr(args, "provenance_pipeline_json", "")
+    if isinstance(pipeline_facts, str):
+        pipeline_facts = json.loads(pipeline_facts) if pipeline_facts else None
+    if pipeline_facts is not None and not isinstance(pipeline_facts, dict):
+        raise ValueError("provenance pipeline facts must be a JSON object")
 
     do_rehydrate = args.rehydrate is not None and args.rehydrate.lower() in (
         "true",
@@ -124,15 +197,20 @@ def main(args):
     preprocess_executor = LocalPipelineExecutor(
         pipeline=[
             reader,
+            *selection_steps,
             *([Rehydrater()] if do_rehydrate else []),
             MegatronDocumentTokenizer(
                 output_folder=args.output_folder,
                 tokenizer_name_or_path=args.tokenizer_name_or_path,
                 eos_token=args.eos_token,
                 provenance=write_source_map,
+                provenance_pipeline=pipeline_facts,
+                batch_size=getattr(args, "tokenizer_batch_size", 10000),
             ),
         ],
         tasks=n_tasks,
+        local_tasks=local_tasks,
+        local_rank_offset=rank_offset,
         workers=args.n_workers,
         start_method="spawn",
         logging_dir=args.logging_dir,
