@@ -23,7 +23,6 @@ input_folder=$PATH_TO_PREPROCESSING_METADATA/raw-dataset-link
 CSV_RESULTS_FILE=$PATH_TO_PREPROCESSING_METADATA/tokenize-$TOKENIZER_NAME-$DATASET_NAME.csv
 ID_COLUMN=${ID_COLUMN:-id}
 INCLUDE_BOOLEAN_COLUMN=${INCLUDE_BOOLEAN_COLUMN:-}
-EXCLUSION_REASON_COLUMN=${EXCLUSION_REASON_COLUMN:-exclusion_reason}
 TOKENIZER_BATCH_SIZE=${TOKENIZER_BATCH_SIZE:-10000}
 
 # Setup ENV
@@ -52,7 +51,6 @@ srun --environment="$ENV_FILE" \
   --extension "${EXTENSION:-.parquet}" \
   --rehydrate "$REHYDRATE_FLAG" \
   --include-boolean-column "$INCLUDE_BOOLEAN_COLUMN" \
-  --exclusion-reason-column "$EXCLUSION_REASON_COLUMN" \
   --tokenizer-batch-size "$TOKENIZER_BATCH_SIZE"
 
 end=$(date +%s)

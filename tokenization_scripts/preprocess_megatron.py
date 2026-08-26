@@ -99,11 +99,6 @@ def get_args():
         help="Optional boolean metadata column deciding which rows are tokenized",
     )
     group.add_argument(
-        "--exclusion-reason-column",
-        default="exclusion_reason",
-        help="Metadata column explaining excluded rows",
-    )
-    group.add_argument(
         "--tokenizer-batch-size",
         type=int,
         default=10000,
@@ -149,12 +144,7 @@ def main(args):
         from data_pipeline_pretrain.pipeline.filters import ApertusCodeLicenseFilter
 
         selection_steps.append(
-            ApertusCodeLicenseFilter(
-                include_column=include_column,
-                reason_column=getattr(
-                    args, "exclusion_reason_column", "exclusion_reason"
-                ),
-            )
+            ApertusCodeLicenseFilter(include_column=include_column)
         )
     do_rehydrate = args.rehydrate is not None and args.rehydrate.lower() in (
         "true",
