@@ -31,6 +31,13 @@ COMMIT_RE = re.compile(r"^[0-9a-f]{40}$")
 SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
 RANK_RE = re.compile(r"^(?P<rank>[0-9]{5})_tokens$")
 PAIR_SUFFIXES = ("bin", "idx", "map")
+INTERMEDIATE_SEAL_FILES = frozenset(
+    {
+        "TOKENIZATION_MANIFEST.jsonl",
+        "TOKENIZATION_RUN.json",
+        "CATEGORY_COUNTS.json",
+    }
+)
 BLOCK_BYTES = 8 * 1024 * 1024
 PARQUET_TRAILER_BYTES = 8
 _PAIR_CONTEXT: tuple[Any, ...] | None = None
@@ -153,7 +160,9 @@ def discover_pairs(
         if path.is_symlink():
             raise ValueError(f"token output contains a symlink: {path}")
         if path.is_file() and path.suffix.removeprefix(".") not in PAIR_SUFFIXES:
-            raise ValueError(f"unexpected file in unsealed token output: {path}")
+            relative = path.relative_to(output_root)
+            if len(relative.parts) != 1 or relative.name not in INTERMEDIATE_SEAL_FILES:
+                raise ValueError(f"unexpected file in unsealed token output: {path}")
     by_suffix: dict[str, set[str]] = {suffix: set() for suffix in PAIR_SUFFIXES}
     for suffix in PAIR_SUFFIXES:
         for path in output_root.rglob(f"*.{suffix}"):
@@ -471,16 +480,9 @@ def validate_and_seal(args: argparse.Namespace) -> dict[str, Any]:
     ):
         if not path.exists():
             raise FileNotFoundError(f"{label} does not exist: {path}")
-    for marker_name in (
-        "TOKENIZATION_MANIFEST.jsonl",
-        "TOKENIZATION_RUN.json",
-        "CATEGORY_COUNTS.json",
-        "_SUCCESS.json",
-    ):
-        if (output_root / marker_name).exists():
-            raise FileExistsError(
-                f"refusing to reseal tokenization: {output_root / marker_name}"
-            )
+    success_path = output_root / "_SUCCESS.json"
+    if success_path.exists():
+        raise FileExistsError(f"refusing to reseal tokenization: {success_path}")
 
     prepared, prepared_pins = load_prepared_inventory(
         dataset_root, manifest_path, marker_path, expected_categories
@@ -655,7 +657,7 @@ def validate_and_seal(args: argparse.Namespace) -> dict[str, Any]:
     _write_immutable(output_root / "TOKENIZATION_RUN.json", run_payload)
     # Completion is deliberately the final publication and byte-identical to the
     # run summary, mirroring the prepared-text artifact's marker-last contract.
-    _write_immutable(output_root / "_SUCCESS.json", run_payload)
+    _write_immutable(success_path, run_payload)
     return run_document
 
 

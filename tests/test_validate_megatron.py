@@ -145,6 +145,14 @@ def test_grouped_tokenization_is_validated_and_sealed_marker_last():
         assert set(categories["categories"]) == set(CATEGORIES)
         assert all(row["sequences"] == 1 for row in categories["categories"].values())
 
+        # If publication of the final marker is interrupted, byte-identical
+        # intermediate manifests are reusable and the marker can be restored.
+        success = output / "_SUCCESS.json"
+        expected_success = success.read_bytes()
+        success.unlink()
+        assert validate_megatron.validate_and_seal(args) == result
+        assert success.read_bytes() == expected_success
+
 
 def test_sequence_above_configured_limit_fails_without_sealing():
     with tempfile.TemporaryDirectory() as temporary:
