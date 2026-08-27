@@ -176,3 +176,20 @@ def test_missing_map_fails_before_validation():
         with pytest.raises(ValueError, match="incomplete token pair"):
             validate_megatron.validate_and_seal(args)
         assert not (Path(args.output_folder) / "_SUCCESS.json").exists()
+
+
+def test_same_size_prepared_payload_change_fails_without_sealing():
+    with tempfile.TemporaryDirectory() as temporary:
+        args = _build_fixture(Path(temporary))
+        source = Path(args.dataset) / "examples" / "programming" / "part.parquet"
+        original_size = source.stat().st_size
+        with source.open("r+b") as stream:
+            stream.seek(4)
+            value = stream.read(1)
+            assert value
+            stream.seek(4)
+            stream.write(bytes([value[0] ^ 1]))
+        assert source.stat().st_size == original_size
+        with pytest.raises(ValueError, match="prepared Parquet digest changed"):
+            validate_megatron.validate_and_seal(args)
+        assert not (Path(args.output_folder) / "_SUCCESS.json").exists()

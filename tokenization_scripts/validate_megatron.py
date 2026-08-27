@@ -379,6 +379,8 @@ def validate_pair(
         ):
             raise ValueError(f"token-map source coverage differs: {relative}")
         source_path = dataset_root.joinpath(*PurePosixPath(relative).parts)
+        if sha256_file(source_path) != expected["sha256"]:
+            raise ValueError(f"prepared Parquet digest changed: {relative}")
         with pq.ParquetFile(source_path) as parquet:
             if parquet.metadata.num_rows != expected["rows"]:
                 raise ValueError(f"prepared Parquet row count changed: {relative}")
