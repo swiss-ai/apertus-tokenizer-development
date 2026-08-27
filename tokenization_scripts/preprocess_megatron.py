@@ -104,6 +104,12 @@ def get_args():
         default=10000,
         help="Documents encoded in one tokenizer batch. Default: 10000",
     )
+    group.add_argument(
+        "--max-sequence-tokens",
+        type=int,
+        default=0,
+        help="Fail before tokenization when an exact sequence exceeds this length; 0 disables the guard",
+    )
 
     args = parser.parse_args()
 
@@ -143,8 +149,19 @@ def main(args):
     if include_column:
         from data_pipeline_pretrain.pipeline.filters import ApertusCodeLicenseFilter
 
-        selection_steps.append(
-            ApertusCodeLicenseFilter(include_column=include_column)
+        selection_steps.append(ApertusCodeLicenseFilter(include_column=include_column))
+    length_steps = []
+    max_sequence_tokens = int(getattr(args, "max_sequence_tokens", 0) or 0)
+    if max_sequence_tokens < 0:
+        raise ValueError("max sequence tokens must be non-negative")
+    if max_sequence_tokens:
+        from data_pipeline_pretrain.pipeline.tokens import MegatronSequenceLengthGuard
+
+        length_steps.append(
+            MegatronSequenceLengthGuard(
+                args.tokenizer_name_or_path,
+                max_sequence_tokens=max_sequence_tokens,
+            )
         )
     do_rehydrate = args.rehydrate is not None and args.rehydrate.lower() in (
         "true",
@@ -156,6 +173,7 @@ def main(args):
             reader,
             *selection_steps,
             *([Rehydrater()] if do_rehydrate else []),
+            *length_steps,
             MegatronDocumentTokenizer(
                 output_folder=args.output_folder,
                 tokenizer_name_or_path=args.tokenizer_name_or_path,
