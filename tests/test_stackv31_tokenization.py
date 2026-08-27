@@ -26,6 +26,7 @@ class Stackv31TokenizationTest(unittest.TestCase):
                         "content": ["alpha beta", "excluded", "gamma"],
                         "content_id": ["one", "two", "three"],
                         "apertus_include": [True, False, True],
+                        "exclusion_reason": ["", "repo_optout", ""],
                     }
                 ),
                 source / "part.parquet",
@@ -64,6 +65,8 @@ class Stackv31TokenizationTest(unittest.TestCase):
                     rehydrate="False",
                     extension=".parquet",
                     include_boolean_column="apertus_include",
+                    include_reason_column="exclusion_reason",
+                    included_reason="",
                     tokenizer_batch_size=2,
                 )
             )

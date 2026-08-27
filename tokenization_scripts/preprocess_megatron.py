@@ -99,6 +99,16 @@ def get_args():
         help="Optional boolean metadata column deciding which rows are tokenized",
     )
     group.add_argument(
+        "--include-reason-column",
+        default="",
+        help="Reason metadata paired with --include-boolean-column",
+    )
+    group.add_argument(
+        "--included-reason",
+        default="included",
+        help="Exact reason value denoting an included row; may be empty",
+    )
+    group.add_argument(
         "--tokenizer-batch-size",
         type=int,
         default=10000,
@@ -147,9 +157,20 @@ def main(args):
         raise ValueError("row selection is only supported for Parquet inputs")
     selection_steps = []
     if include_column:
-        from data_pipeline_pretrain.pipeline.filters import ApertusCodeLicenseFilter
+        from data_pipeline_pretrain.pipeline.filters import MetadataInclusionFilter
 
-        selection_steps.append(ApertusCodeLicenseFilter(include_column=include_column))
+        reason_column = getattr(args, "include_reason_column", "")
+        if not reason_column:
+            raise ValueError(
+                "include boolean column requires an include reason column"
+            )
+        selection_steps.append(
+            MetadataInclusionFilter(
+                include_column=include_column,
+                reason_column=reason_column,
+                included_reason=getattr(args, "included_reason", "included"),
+            )
+        )
     length_steps = []
     max_sequence_tokens = int(getattr(args, "max_sequence_tokens", 0) or 0)
     if max_sequence_tokens < 0:

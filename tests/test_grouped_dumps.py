@@ -172,6 +172,8 @@ class GroupedDumpsTest(unittest.TestCase):
                     "EXPECTED_GROUP_HEADS=programming,data",
                     "MAX_DUMP_BYTES=150000000000",
                     "INCLUDE_BOOLEAN_COLUMN=apertus_include",
+                    "INCLUDE_REASON_COLUMN=exclusion_reason",
+                    "INCLUDED_REASON=",
                     "REHYDRATE_FLAG=False",
                     "EXTENSION=.parquet",
                     "NUMBER_OF_DATATROVE_TASKS=4",
