@@ -14,7 +14,14 @@ from datatrove.executor.local import LocalPipelineExecutor
 from datatrove.pipeline.readers import JsonlReader
 
 
-def get_args():
+def positive_int(value):
+    parsed = int(value)
+    if parsed < 1:
+        raise argparse.ArgumentTypeError("must be a positive integer")
+    return parsed
+
+
+def get_args(argv=None):
     parser = argparse.ArgumentParser()
 
     group = parser.add_argument_group(title="Tokenizer")
@@ -29,6 +36,18 @@ def get_args():
         type=str,
         default=None,
         help="EOS token to add after each document. Default: None",
+    )
+    group.add_argument(
+        "--batch-size",
+        type=positive_int,
+        default=10_000,
+        help="Maximum documents per tokenizer call. Default: 10000",
+    )
+    group.add_argument(
+        "--batch-bytes",
+        type=positive_int,
+        default=32 * 1024**2,
+        help="Maximum UTF-8 input bytes per tokenizer call. Default: 33554432",
     )
 
     group = parser.add_argument_group(title="Output data")
@@ -109,19 +128,13 @@ def get_args():
         help="Exact reason value denoting an included row; may be empty",
     )
     group.add_argument(
-        "--tokenizer-batch-size",
-        type=int,
-        default=10000,
-        help="Documents encoded in one tokenizer batch. Default: 10000",
-    )
-    group.add_argument(
         "--max-sequence-tokens",
         type=int,
         default=0,
         help="Fail before tokenization when an exact sequence exceeds this length; 0 disables the guard",
     )
 
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
 
     return args
 
@@ -134,6 +147,7 @@ def main(args):
     n_tasks = min(n_tasks, number_of_files)
     if n_tasks < 1:
         raise ValueError("paths file contains no inputs")
+    n_workers = min(args.n_workers, n_tasks) if args.n_workers > 0 else args.n_workers
 
     if "jsonl" in args.extension:
         reader = JsonlReader(
@@ -189,12 +203,17 @@ def main(args):
                 tokenizer_name_or_path=args.tokenizer_name_or_path,
                 eos_token=args.eos_token,
                 provenance=write_source_map,
-                batch_size=getattr(args, "tokenizer_batch_size", 10000),
+                batch_size=getattr(
+                    args,
+                    "batch_size",
+                    getattr(args, "tokenizer_batch_size", 10000),
+                ),
+                batch_bytes=getattr(args, "batch_bytes", 32 * 1024**2),
                 max_sequence_tokens=max_sequence_tokens,
             ),
         ],
         tasks=n_tasks,
-        workers=args.n_workers,
+        workers=n_workers,
         start_method="spawn",
         logging_dir=args.logging_dir,
     )
