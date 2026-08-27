@@ -339,18 +339,22 @@ from the run outputs.
 | MGSM ↑ | 0.016 | 0.011 | 0.014 | 0.010 |
 | Belebele acc ↑ | 0.240 | 0.256 | 0.249 | 0.263 |
 | MC-math ↑ | 0.273 | 0.279 | 0.285 | 0.247 |
-| GSM8K flex (≤500) ↑ | 0.242 | 0.236 | 0.240 | 0.240 |
-| HumanEval pass@1 ↑ | 0.079 | 0.116 | 0.024 | 0.073 |
-| MBPP pass@1 ↑ | 0.154 | 0.102 | 0.170 | 0.206 |
+| GSM8K flex (full 1319-item set) ↑ | 0.235 | 0.229 | 0.226 | 0.244 |
+| HumanEval pass@1 ↑ | 0.146 | 0.165 | 0.159 | 0.171 |
+| MBPP pass@1 ↑ [95% CI] | 0.224 [0.188, 0.260] | 0.182 [0.148, 0.216] | 0.212 [0.176, 0.248] | 0.228 [0.192, 0.264] |
 
 The four candidates are close on general modeling: validation BPB 0.720 to 0.728,
-FLORES BPB 1.163 to 1.167, and BLiMP 0.814 to 0.821. The math and code numbers are
-small, single-seed, computed on at most 500 examples with wide confidence
-intervals, and do not point one way: `preliminary_mul_200k` is highest on MBPP
-(0.206), `preliminary_mul` on MC-math (0.285), `preliminary_euh` on HumanEval
-(0.116), `preliminary_enh` on GSM8K (0.242). At this model size and token budget
-there is no consistent downstream separation; the choice rests on the intrinsic
-compression profile, not on these extrinsic numbers.
+FLORES BPB 1.163 to 1.167, and BLiMP 0.814 to 0.821. GSM8K, HumanEval, and MBPP
+are single-seed; GSM8K and HumanEval have no computed CI (small samples, n=164
+for HumanEval) and a paired-bootstrap check across all four plus Apertus v1
+finds no significant pairwise difference on either. MBPP has a paired-bootstrap
+95% CI (`bootstrap_mathcode_significance.py`, `generation_spec` v2-2026-07-30):
+`preliminary_mul_200k` is highest (0.228 [0.192, 0.264]) and significantly ahead
+of `preliminary_euh` (p_BH = 0.039), but not distinguishable from
+`preliminary_enh` or `preliminary_mul` (p_BH = 0.889 and 0.504). `preliminary_mul`
+is highest on MC-math (0.285, single run, no CI). At this model size and token
+budget there is no consistent downstream separation strong enough to override
+the intrinsic compression profile, which is what the recommendation rests on.
 
 ## Takeaways
 
