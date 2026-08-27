@@ -171,19 +171,9 @@ def main(args):
                 included_reason=getattr(args, "included_reason", "included"),
             )
         )
-    length_steps = []
     max_sequence_tokens = int(getattr(args, "max_sequence_tokens", 0) or 0)
     if max_sequence_tokens < 0:
         raise ValueError("max sequence tokens must be non-negative")
-    if max_sequence_tokens:
-        from data_pipeline_pretrain.pipeline.tokens import MegatronSequenceLengthGuard
-
-        length_steps.append(
-            MegatronSequenceLengthGuard(
-                args.tokenizer_name_or_path,
-                max_sequence_tokens=max_sequence_tokens,
-            )
-        )
     do_rehydrate = args.rehydrate is not None and args.rehydrate.lower() in (
         "true",
         "1",
@@ -194,13 +184,13 @@ def main(args):
             reader,
             *selection_steps,
             *([Rehydrater()] if do_rehydrate else []),
-            *length_steps,
             MegatronDocumentTokenizer(
                 output_folder=args.output_folder,
                 tokenizer_name_or_path=args.tokenizer_name_or_path,
                 eos_token=args.eos_token,
                 provenance=write_source_map,
                 batch_size=getattr(args, "tokenizer_batch_size", 10000),
+                max_sequence_tokens=max_sequence_tokens,
             ),
         ],
         tasks=n_tasks,
