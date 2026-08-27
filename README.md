@@ -142,7 +142,19 @@ PATH_TO_OUTPUT_FOLDER=/capstor/store/cscs/swissai/infra01/datasets_tokenized/fin
 DUMPS_NUMBER=35 # This needs to be (size of dataset in GB)/(2GB) for example for a dataset of size 100GB DUMPS_NUMBER=50
 REHYDRATE_FLAG=False # Some datasets need to be rehydrated (upsampled after deduplication) typically these are the fw2 datasets which are globally deduplicated, but there are others. Check the excel sheet.
 EXTENSION=.parquet # File extension. Almost always .parquet.
+# Optional safety and concurrency controls. These defaults bound tokenizer memory
+# and divide the node CPUs between concurrent Datatrove workers.
+TOKENIZER_BATCH_SIZE=10000
+TOKENIZER_BATCH_BYTES=33554432
+TOKENIZER_WORKERS=$NUMBER_OF_DATATROVE_TASKS
+# Optional override; the default is min(144, CPUS_PER_TASK / TOKENIZER_WORKERS).
+# TOKENIZER_THREADS=144
 ```
+
+`TOKENIZER_BATCH_BYTES` is the primary memory guard: a tokenizer call closes at
+either the document-count or UTF-8-byte limit. A single document larger than the
+limit is processed alone. Keep `TOKENIZER_WORKERS * TOKENIZER_THREADS` at or
+below `CPUS_PER_TASK` to avoid competing Rayon thread pools.
 
 Sometimes individual tokenization jobs fail this can be inspected from dumps remaining in the dumps folder and not having been moved to the completed-dumps folder. In this case one should rerun the script with the `--dont_recompute_dumps` flag
 

@@ -4,13 +4,23 @@ python3 preprocess_megatron.py --tokenizer-name-or-path meta-llama/Meta-Llama-3-
 
 import argparse
 
-from data_pipeline_pretrain.pipeline.tokens import MegatronDocumentTokenizer
-from data_pipeline_pretrain.pipeline.tokens import Rehydrater
+from data_pipeline_pretrain.pipeline.tokens import (
+    MegatronDocumentTokenizer,
+    ProvenanceParquetReader,
+    Rehydrater,
+)
 from datatrove.executor.local import LocalPipelineExecutor
-from datatrove.pipeline.readers import ParquetReader, JsonlReader
+from datatrove.pipeline.readers import JsonlReader
 
 
-def get_args():
+def positive_int(value):
+    parsed = int(value)
+    if parsed < 1:
+        raise argparse.ArgumentTypeError("must be a positive integer")
+    return parsed
+
+
+def get_args(argv=None):
     parser = argparse.ArgumentParser()
 
     group = parser.add_argument_group(title="Tokenizer")
@@ -25,6 +35,18 @@ def get_args():
         type=str,
         default=None,
         help="EOS token to add after each document. Default: None",
+    )
+    group.add_argument(
+        "--batch-size",
+        type=positive_int,
+        default=10_000,
+        help="Maximum documents per tokenizer call. Default: 10000",
+    )
+    group.add_argument(
+        "--batch-bytes",
+        type=positive_int,
+        default=32 * 1024**2,
+        help="Maximum UTF-8 input bytes per tokenizer call. Default: 33554432",
     )
 
     group = parser.add_argument_group(title="Output data")
@@ -85,7 +107,7 @@ def get_args():
         help="File extension to use. e.g. .parquet or .jsonl.zst. Default: .parquet",
     )
 
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
 
     return args
 
@@ -104,12 +126,14 @@ def main(args):
             paths_file=args.paths_file,
             text_key=args.column,
         )
+        write_source_map = False
     else:
-        reader = ParquetReader(
+        reader = ProvenanceParquetReader(
             data_folder=args.dataset,
             paths_file=args.paths_file,
             text_key=args.column,
         )
+        write_source_map = True
 
     do_rehydrate = args.rehydrate is not None and args.rehydrate.lower() in (
         "true",
@@ -124,10 +148,14 @@ def main(args):
                 output_folder=args.output_folder,
                 tokenizer_name_or_path=args.tokenizer_name_or_path,
                 eos_token=args.eos_token,
+                batch_size=args.batch_size,
+                batch_bytes=args.batch_bytes,
+                provenance=write_source_map,
             ),
         ],
         tasks=n_tasks,
         workers=args.n_workers,
+        start_method="spawn",
         logging_dir=args.logging_dir,
     )
     preprocess_executor.run()
