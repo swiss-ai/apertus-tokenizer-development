@@ -11,17 +11,20 @@ SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 
 # Parse args: accept config file and optional --dont_compute_dumps flag
 DONT_COMPUTE_DUMPS=0
+PREPARE_ONLY=0
 CONFIG_FILE=""
 for arg in "$@"; do
   if [ "$arg" = "--dont_compute_dumps" ]; then
     DONT_COMPUTE_DUMPS=1
+  elif [ "$arg" = "--prepare-only" ]; then
+    PREPARE_ONLY=1
   elif [ -z "$CONFIG_FILE" ]; then
     CONFIG_FILE="$arg"
   fi
 done
 
 if [ -z "$CONFIG_FILE" ]; then
-  echo "Usage: $0 <config-file> [--dont_compute_dumps]"
+  echo "Usage: $0 <config-file> [--dont_compute_dumps] [--prepare-only]"
   exit 1
 fi
 
@@ -55,6 +58,19 @@ EXPECTED_GROUP_COUNT=${EXPECTED_GROUP_COUNT:-0}
 EXPECTED_GROUP_HEADS=${EXPECTED_GROUP_HEADS:-}
 MAX_DUMP_BYTES=${MAX_DUMP_BYTES:-150000000000}
 TOKENIZER_BATCH_SIZE=${TOKENIZER_BATCH_SIZE:-10000}
+MAX_SEQUENCE_TOKENS=${MAX_SEQUENCE_TOKENS:-0}
+REQUIRED_DATASET_MARKER=${REQUIRED_DATASET_MARKER:-}
+
+TOKENIZATION_LAUNCH_BACKEND=${TOKENIZATION_LAUNCH_BACKEND:-slurm}
+if [ "$TOKENIZATION_LAUNCH_BACKEND" != slurm ] && [ "$TOKENIZATION_LAUNCH_BACKEND" != rcp ]; then
+  echo "Unsupported tokenization launch backend: $TOKENIZATION_LAUNCH_BACKEND" >&2
+  exit 1
+fi
+
+if [ -n "$REQUIRED_DATASET_MARKER" ] && [ ! -f "$REQUIRED_DATASET_MARKER" ]; then
+  echo "Required sealed-dataset marker is missing: $REQUIRED_DATASET_MARKER" >&2
+  exit 1
+fi
 
 if [ "$DONT_COMPUTE_DUMPS" -eq 0 ]; then
   mkdir -p "$PATH_TO_PREPROCESSING_METADATA/completed-dumps" #used later by tokenize.sh
@@ -87,11 +103,20 @@ if [ "$DONT_COMPUTE_DUMPS" -eq 0 ]; then
       --group-metadata-id-field "$DUMP_GROUP_METADATA_ID_FIELD"
     )
   fi
-  srun --environment="$SCRIPT_DIR/env.toml" --partition=debug --account="$ACCOUNT" \
-    --job-name=dumps_prep --export=ALL \
+  if [ "$TOKENIZATION_LAUNCH_BACKEND" = rcp ]; then
     python3 "$SCRIPT_DIR/prepare_dumps.py" "${prepare_args[@]}"
+  else
+    srun --environment="$SCRIPT_DIR/env.toml" --partition=debug --account="$ACCOUNT" \
+      --job-name=dumps_prep --export=ALL \
+      python3 "$SCRIPT_DIR/prepare_dumps.py" "${prepare_args[@]}"
+  fi
 else
   echo "Skipping dump creation and directory setup due to --dont_compute_dumps flag"
+fi
+
+if [ "$PREPARE_ONLY" -eq 1 ]; then
+  echo "Prepared configured dumps; submission intentionally skipped"
+  exit 0
 fi
 
 echo "slurm_job_id,node,start,end,paths_file,output_folder,dataset_total_size,processed_total_size,number_of_workers_per_node,time,bw,total_tokens_processed,throughput (Million Tokens/Second/Node)" >"$CSV_RESULTS_FILE"

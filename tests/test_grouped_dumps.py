@@ -161,6 +161,7 @@ class GroupedDumpsTest(unittest.TestCase):
                     f"PATH_TO_PREPROCESSING_METADATA={self.metadata}",
                     "DATASET_OUTPUT_FOLDER_NAME=$PATH_TO_OUTPUT_FOLDER/$TOKENIZER_NAME",
                     f"DATASET_MANIFEST={self.source / 'manifest.jsonl'}",
+                    f"REQUIRED_DATASET_MARKER={self.source / '_SUCCESS'}",
                     "MANIFEST_PATH_KEY=relative_path",
                     "DUMP_GROUP_FIELDS=category,language_slug",
                     f"DUMP_GROUP_METADATA={self.source / 'languages.json'}",
@@ -187,6 +188,9 @@ class GroupedDumpsTest(unittest.TestCase):
             + "\n",
             encoding="utf-8",
         )
+        with self.assertRaises(subprocess.CalledProcessError):
+            self.run_entrypoint(config)
+        (self.source / "_SUCCESS").write_text("sealed\n", encoding="utf-8")
         submitted = self.run_entrypoint(config)
         self.assertEqual(len(submitted), 2)
         self.assertTrue(all("tokenize.sh" in call for call in submitted))

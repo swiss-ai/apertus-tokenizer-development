@@ -24,6 +24,8 @@ CSV_RESULTS_FILE=$PATH_TO_PREPROCESSING_METADATA/tokenize-$TOKENIZER_NAME-$DATAS
 ID_COLUMN=${ID_COLUMN:-id}
 INCLUDE_BOOLEAN_COLUMN=${INCLUDE_BOOLEAN_COLUMN:-}
 TOKENIZER_BATCH_SIZE=${TOKENIZER_BATCH_SIZE:-10000}
+MAX_SEQUENCE_TOKENS=${MAX_SEQUENCE_TOKENS:-0}
+TOKENIZATION_LAUNCH_BACKEND=${TOKENIZATION_LAUNCH_BACKEND:-slurm}
 
 # Setup ENV
 export HF_HUB_ENABLE_HF_TRANSFER=0
@@ -36,10 +38,8 @@ echo "START TIME: $(date) | Preprocessing $paths_file with $NUMBER_OF_DATATROVE_
 start_s=$(date)
 start=$(date +%s)
 
-# 2. Add srun --environment to execute the python command inside the container
-srun --environment="$ENV_FILE" \
-  numactl --membind=0-3 \
-  python3 "$SCRIPT_DIR/preprocess_megatron.py" \
+preprocess_command=(
+  python3 "$SCRIPT_DIR/preprocess_megatron.py"
   --tokenizer-name-or-path "$TOKENIZER" \
   --output-folder "$output_folder" \
   --logging-dir "$logging_dir" \
@@ -52,6 +52,16 @@ srun --environment="$ENV_FILE" \
   --rehydrate "$REHYDRATE_FLAG" \
   --include-boolean-column "$INCLUDE_BOOLEAN_COLUMN" \
   --tokenizer-batch-size "$TOKENIZER_BATCH_SIZE"
+  --max-sequence-tokens "$MAX_SEQUENCE_TOKENS"
+)
+if [ "$TOKENIZATION_LAUNCH_BACKEND" = rcp ]; then
+  "${preprocess_command[@]}"
+elif [ "$TOKENIZATION_LAUNCH_BACKEND" = slurm ]; then
+  srun --environment="$ENV_FILE" numactl --membind=0-3 "${preprocess_command[@]}"
+else
+  echo "Unsupported tokenization launch backend: $TOKENIZATION_LAUNCH_BACKEND" >&2
+  exit 1
+fi
 
 end=$(date +%s)
 end_s=$(date)
@@ -60,7 +70,11 @@ echo "FINISH TIME: $(date) | Preprocessed $paths_file ! Stored in $output_folder
 # Stats
 wc=$((end - start))
 
-dataset_total_size=$(srun --environment="$ENV_FILE" python3 "$SCRIPT_DIR/compute_dump_size.py" "$paths_file")
+if [ "$TOKENIZATION_LAUNCH_BACKEND" = rcp ]; then
+  dataset_total_size=$(python3 "$SCRIPT_DIR/compute_dump_size.py" "$paths_file")
+else
+  dataset_total_size=$(srun --environment="$ENV_FILE" python3 "$SCRIPT_DIR/compute_dump_size.py" "$paths_file")
+fi
 
 processed_total_size=$(du -shLb "$output_folder" | cut -f1)
 
