@@ -24,6 +24,7 @@ CSV_RESULTS_FILE=$PATH_TO_PREPROCESSING_METADATA/tokenize-$TOKENIZER_NAME-$DATAS
 ID_COLUMN=${ID_COLUMN:-id}
 INCLUDE_BOOLEAN_COLUMN=${INCLUDE_BOOLEAN_COLUMN:-}
 TOKENIZER_BATCH_SIZE=${TOKENIZER_BATCH_SIZE:-10000}
+MAX_SEQUENCE_TOKENS=${MAX_SEQUENCE_TOKENS:-0}
 
 # Setup ENV
 export HF_HUB_ENABLE_HF_TRANSFER=0
@@ -51,7 +52,8 @@ srun --environment="$ENV_FILE" \
   --extension "${EXTENSION:-.parquet}" \
   --rehydrate "$REHYDRATE_FLAG" \
   --include-boolean-column "$INCLUDE_BOOLEAN_COLUMN" \
-  --tokenizer-batch-size "$TOKENIZER_BATCH_SIZE"
+  --tokenizer-batch-size "$TOKENIZER_BATCH_SIZE" \
+  --max-sequence-tokens "$MAX_SEQUENCE_TOKENS"
 
 end=$(date +%s)
 end_s=$(date)
