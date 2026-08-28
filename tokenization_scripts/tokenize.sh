@@ -56,7 +56,7 @@ start_s=$(date)
 start=$(date +%s)
 
 # 2. Add srun --environment to execute the python command inside the container
-srun --environment=$ENV_FILE \
+srun --ntasks=1 --environment=$ENV_FILE \
   numactl --membind=0-3 \
   python3 preprocess_megatron.py \
   --tokenizer-name-or-path $tokenizer \
