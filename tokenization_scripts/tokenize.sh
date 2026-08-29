@@ -100,9 +100,9 @@ echo "FINISH TIME: $(date) | Preprocessed $paths_file ! Stored in $output_folder
 wc=$((end - start))
 
 if [ "$TOKENIZATION_LAUNCH_BACKEND" = rcp ]; then
-  dataset_total_size=$(python3 "$SCRIPT_DIR/compute_dump_size.py" "$paths_file")
+  dataset_total_size=$(python3 "$SCRIPT_DIR/compute_dump_size.py" "$paths_file" "$input_folder")
 else
-  dataset_total_size=$(srun --environment="$ENV_FILE" python3 "$SCRIPT_DIR/compute_dump_size.py" "$paths_file")
+  dataset_total_size=$(srun --environment="$ENV_FILE" python3 "$SCRIPT_DIR/compute_dump_size.py" "$paths_file" "$input_folder")
 fi
 
 processed_total_size=$(du -shLb "$output_folder" | cut -f1)
