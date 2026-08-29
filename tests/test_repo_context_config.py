@@ -56,9 +56,14 @@ def test_repo_context_configs_separate_clariden_and_rcp_paths():
         "stackv31-repo-context-4k-v1_apertus_v2"
     )
     assert rcp["EXECUTION_SITE"] == "RCP"
-    assert rcp["PATH_TO_RAW_DATASET"] == (
-        "/mloscratch/stackv31-repo-context-4k-v1"
-    )
+    assert rcp["PATH_TO_RAW_DATASET"] == ("/mloscratch/stackv31-repo-context-4k-v1")
     assert rcp["PATH_TO_OUTPUT_FOLDER"] == (
         "/mloscratch/stackv31-repo-context-4k-v1_apertus_v2"
     )
+
+
+def test_worker_and_validator_resolve_tokenizer_from_script_directory():
+    expected = 'TOKENIZER=$(cd "$SCRIPT_DIR" && realpath "$TOKENIZER")'
+    for script in ("tokenize.sh", "validate_tokenization.sh"):
+        value = (ROOT / "tokenization_scripts" / script).read_text(encoding="utf-8")
+        assert expected in value

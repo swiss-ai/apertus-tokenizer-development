@@ -10,6 +10,9 @@ if [ -z "$CONFIG_FILE" ] || [ ! -f "$CONFIG_FILE" ]; then
 fi
 CONFIG_FILE=$(cd "$(dirname "$CONFIG_FILE")" && pwd)/$(basename "$CONFIG_FILE")
 source "$CONFIG_FILE"
+if [[ "$TOKENIZER" != /* ]]; then
+  TOKENIZER=$(cd "$SCRIPT_DIR" && realpath "$TOKENIZER")
+fi
 
 implementation_commit=${2:-$(git -C "$SCRIPT_DIR/.." rev-parse HEAD)}
 output_folder=${DATASET_OUTPUT_FOLDER_NAME:-$PATH_TO_OUTPUT_FOLDER/$TOKENIZER_NAME/$DATASET_NAME}

@@ -18,6 +18,9 @@ paths_file=$4
 COMPLETED_DUMPS_FOLDER=${5:-$(dirname "$(dirname "$paths_file")")/completed-dumps}
 
 source "$CONFIG_FILE"
+if [[ "$TOKENIZER" != /* ]]; then
+  TOKENIZER=$(cd "$SCRIPT_DIR" && realpath "$TOKENIZER")
+fi
 
 input_folder=$PATH_TO_PREPROCESSING_METADATA/raw-dataset-link
 CSV_RESULTS_FILE=$PATH_TO_PREPROCESSING_METADATA/tokenize-$TOKENIZER_NAME-$DATASET_NAME.csv
