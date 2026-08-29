@@ -25,8 +25,11 @@ import pyarrow.parquet as pq
 from data_pipeline_pretrain.pipeline.tokens import read_token_map
 
 INDEX_HEADER = b"MMIDIDX\x00\x00"
-RUN_SCHEMA = "megatron-tokenization-run/v1"
+RUN_SCHEMA = "megatron-tokenization-run/v2"
 CATEGORY_SCHEMA = "megatron-tokenization-category-counts/v1"
+STRICT_VALIDATION = "strict"
+LIGHTWEIGHT_VALIDATION = "lightweight_infrastructure"
+VALIDATION_MODES = frozenset({STRICT_VALIDATION, LIGHTWEIGHT_VALIDATION})
 COMMIT_RE = re.compile(r"^[0-9a-f]{40}$")
 SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
 RANK_RE = re.compile(r"^(?P<rank>[0-9]{5})_tokens$")
@@ -204,7 +207,9 @@ def _array_all_equal(actual: np.ndarray, expected) -> bool:
     return True
 
 
-def validate_index(path: Path, max_sequence_tokens: int) -> dict[str, int]:
+def validate_index(
+    path: Path, max_sequence_tokens: int, validation_mode: str
+) -> dict[str, int]:
     """Validate one Megatron index without loading its arrays into memory."""
 
     with path.open("rb") as stream:
@@ -238,29 +243,40 @@ def validate_index(path: Path, max_sequence_tokens: int) -> dict[str, int]:
         raise ValueError(f"sequence length is outside 1..{max_sequence_tokens}: {path}")
     token_count = int(lengths.sum(dtype=np.int64))
     token_bytes = 4 if dtype_code == 4 else 2
-    pointers = np.memmap(
-        path, mode="r", dtype="<i8", offset=pointers_offset, shape=(sequence_count,)
-    )
-    cumulative = 0
-    chunk_items = 1_000_000
-    for start in range(0, sequence_count, chunk_items):
-        end = min(sequence_count, start + chunk_items)
-        expected = np.empty(end - start, dtype=np.int64)
-        expected[0] = cumulative
-        if end - start > 1:
-            np.cumsum(lengths[start : end - 1], dtype=np.int64, out=expected[1:])
-            expected[1:] = (expected[1:] + cumulative) * token_bytes
-        expected[0] *= token_bytes
-        if not bool(np.array_equal(pointers[start:end], expected)):
-            raise ValueError(f"Megatron sequence pointers are not cumulative: {path}")
-        cumulative += int(lengths[start:end].sum(dtype=np.int64))
-    documents = np.memmap(
-        path, mode="r", dtype="<i8", offset=documents_offset, shape=(document_count,)
-    )
-    if not _array_all_equal(
-        documents, lambda start, end: np.arange(start, end, dtype=np.int64)
-    ):
-        raise ValueError(f"Megatron document indices are not 0..N: {path}")
+    if validation_mode == STRICT_VALIDATION:
+        pointers = np.memmap(
+            path,
+            mode="r",
+            dtype="<i8",
+            offset=pointers_offset,
+            shape=(sequence_count,),
+        )
+        cumulative = 0
+        chunk_items = 1_000_000
+        for start in range(0, sequence_count, chunk_items):
+            end = min(sequence_count, start + chunk_items)
+            expected = np.empty(end - start, dtype=np.int64)
+            expected[0] = cumulative
+            if end - start > 1:
+                np.cumsum(lengths[start : end - 1], dtype=np.int64, out=expected[1:])
+                expected[1:] = (expected[1:] + cumulative) * token_bytes
+            expected[0] *= token_bytes
+            if not bool(np.array_equal(pointers[start:end], expected)):
+                raise ValueError(
+                    f"Megatron sequence pointers are not cumulative: {path}"
+                )
+            cumulative += int(lengths[start:end].sum(dtype=np.int64))
+        documents = np.memmap(
+            path,
+            mode="r",
+            dtype="<i8",
+            offset=documents_offset,
+            shape=(document_count,),
+        )
+        if not _array_all_equal(
+            documents, lambda start, end: np.arange(start, end, dtype=np.int64)
+        ):
+            raise ValueError(f"Megatron document indices are not 0..N: {path}")
     return {
         "sequence_count": int(sequence_count),
         "token_count": token_count,
@@ -303,6 +319,7 @@ def validate_pair(
     max_sequence_tokens: int,
     text_column: str,
     id_column: str,
+    validation_mode: str,
 ) -> dict[str, Any]:
     output_root = Path(output_root_value)
     dataset_root = Path(dataset_root_value)
@@ -310,23 +327,31 @@ def validate_pair(
     bin_path = base.with_suffix(".bin")
     idx_path = base.with_suffix(".idx")
     map_path = base.with_suffix(".map")
-    index = validate_index(idx_path, max_sequence_tokens)
+    index = validate_index(idx_path, max_sequence_tokens, validation_mode)
     if bin_path.stat().st_size != index["token_count"] * index["token_bytes"]:
         raise ValueError(f"token binary size disagrees with index: {bin_path}")
-    index_sha256 = sha256_file(idx_path)
+    index_sha256 = (
+        sha256_file(idx_path) if validation_mode == STRICT_VALIDATION else None
+    )
     token_map = read_token_map(map_path.read_bytes())
     manifest = token_map["manifest"]
     for key, expected in (
         ("sequence_count", index["sequence_count"]),
         ("token_count", index["token_count"]),
         ("index_bytes", idx_path.stat().st_size),
-        ("index_sha256", index_sha256),
         ("text_column", text_column),
         ("id_column", id_column),
         ("output_prefix", base.name),
     ):
         if manifest.get(key) != expected:
             raise ValueError(f"token map differs for {key}: {map_path}")
+    writer_index_sha256 = manifest.get("index_sha256")
+    if not isinstance(writer_index_sha256, str) or not SHA256_RE.fullmatch(
+        writer_index_sha256
+    ):
+        raise ValueError(f"token map has an invalid index digest: {map_path}")
+    if index_sha256 is not None and writer_index_sha256 != index_sha256:
+        raise ValueError(f"token map differs for index_sha256: {map_path}")
     tokenizer = manifest.get("tokenizer")
     if not isinstance(tokenizer, dict):
         raise TypeError(f"token map has no tokenizer identity: {map_path}")
@@ -388,7 +413,10 @@ def validate_pair(
         ):
             raise ValueError(f"token-map source coverage differs: {relative}")
         source_path = dataset_root.joinpath(*PurePosixPath(relative).parts)
-        if sha256_file(source_path) != expected["sha256"]:
+        if (
+            validation_mode == STRICT_VALIDATION
+            and sha256_file(source_path) != expected["sha256"]
+        ):
             raise ValueError(f"prepared Parquet digest changed: {relative}")
         with pq.ParquetFile(source_path) as parquet:
             if parquet.metadata.num_rows != expected["rows"]:
@@ -416,8 +444,11 @@ def validate_pair(
         "bin_bytes": bin_path.stat().st_size,
         "idx_bytes": idx_path.stat().st_size,
         "map_bytes": map_path.stat().st_size,
-        "bin_sha256": sha256_file(bin_path),
+        "bin_sha256": (
+            sha256_file(bin_path) if validation_mode == STRICT_VALIDATION else None
+        ),
         "idx_sha256": index_sha256,
+        "writer_idx_sha256": writer_index_sha256,
         "map_sha256": sha256_file(map_path),
         "sources": sources,
     }
@@ -468,8 +499,14 @@ def validate_and_seal(args: argparse.Namespace) -> dict[str, Any]:
     }
     if not expected_categories:
         raise ValueError("expected categories are empty")
+    validation_mode = getattr(args, "validation_mode", STRICT_VALIDATION)
+    validator_commit = getattr(args, "validator_commit", args.implementation_commit)
+    if validation_mode not in VALIDATION_MODES:
+        raise ValueError(f"unsupported validation mode: {validation_mode}")
     if not COMMIT_RE.fullmatch(args.implementation_commit):
         raise ValueError("implementation commit must be a full lowercase Git commit")
+    if not COMMIT_RE.fullmatch(validator_commit):
+        raise ValueError("validator commit must be a full lowercase Git commit")
     if args.workers < 1 or args.max_sequence_tokens < 1:
         raise ValueError("workers and max sequence tokens must be positive")
     for path, label in (
@@ -501,6 +538,7 @@ def validate_and_seal(args: argparse.Namespace) -> dict[str, Any]:
         args.max_sequence_tokens,
         args.text_column,
         args.id_column,
+        validation_mode,
     )
     if args.workers == 1:
         reports = [
@@ -605,6 +643,7 @@ def validate_and_seal(args: argparse.Namespace) -> dict[str, Any]:
                 "bin_sha256",
                 "idx_sha256",
                 "map_sha256",
+                "writer_idx_sha256",
                 "sources",
             )
         }
@@ -630,9 +669,11 @@ def validate_and_seal(args: argparse.Namespace) -> dict[str, Any]:
             "expected_categories": sorted(expected_categories),
             "text_column": args.text_column,
             "id_column": args.id_column,
+            "validation_mode": validation_mode,
         },
         "pins": {
             "implementation_commit": args.implementation_commit,
+            "validator_commit": validator_commit,
             "config_sha256": sha256_file(config_path),
             "prepared_marker_sha256": prepared_pins["marker_sha256"],
             "prepared_examples_manifest_sha256": prepared_pins["manifest_sha256"],
@@ -670,6 +711,7 @@ def get_args() -> argparse.Namespace:
     parser.add_argument("--tokenizer", required=True)
     parser.add_argument("--config", required=True)
     parser.add_argument("--implementation-commit", required=True)
+    parser.add_argument("--validator-commit", required=True)
     parser.add_argument("--dataset-name", required=True)
     parser.add_argument("--tokenizer-name", required=True)
     parser.add_argument("--text-column", default="text")
@@ -677,6 +719,11 @@ def get_args() -> argparse.Namespace:
     parser.add_argument("--expected-categories", required=True)
     parser.add_argument("--max-sequence-tokens", type=int, required=True)
     parser.add_argument("--workers", type=int, default=8)
+    parser.add_argument(
+        "--validation-mode",
+        choices=sorted(VALIDATION_MODES),
+        default=STRICT_VALIDATION,
+    )
     return parser.parse_args()
 
 

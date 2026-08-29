@@ -201,3 +201,47 @@ def test_same_size_prepared_payload_change_fails_without_sealing():
         with pytest.raises(ValueError, match="prepared Parquet digest changed"):
             validate_megatron.validate_and_seal(args)
         assert not (Path(args.output_folder) / "_SUCCESS.json").exists()
+
+
+def test_lightweight_validation_checks_structure_without_payload_rehashing():
+    with tempfile.TemporaryDirectory() as temporary:
+        args = _build_fixture(Path(temporary))
+        args.validation_mode = validate_megatron.LIGHTWEIGHT_VALIDATION
+        args.validator_commit = "b" * 40
+        source = Path(args.dataset) / "examples" / "programming" / "part.parquet"
+        with source.open("r+b") as stream:
+            stream.seek(4)
+            value = stream.read(1)
+            assert value
+            stream.seek(4)
+            stream.write(bytes([value[0] ^ 1]))
+
+        result = validate_megatron.validate_and_seal(args)
+
+        assert result["constraints"]["validation_mode"] == (
+            validate_megatron.LIGHTWEIGHT_VALIDATION
+        )
+        assert result["pins"]["validator_commit"] == "b" * 40
+        manifest_rows = [
+            json.loads(line)
+            for line in (Path(args.output_folder) / "TOKENIZATION_MANIFEST.jsonl")
+            .read_text(encoding="utf-8")
+            .splitlines()
+        ]
+        assert all(row["bin_sha256"] is None for row in manifest_rows)
+        assert all(row["idx_sha256"] is None for row in manifest_rows)
+        assert all(
+            validate_megatron.SHA256_RE.fullmatch(row["writer_idx_sha256"])
+            for row in manifest_rows
+        )
+
+
+def test_lightweight_validation_detects_truncated_token_payload():
+    with tempfile.TemporaryDirectory() as temporary:
+        args = _build_fixture(Path(temporary))
+        args.validation_mode = validate_megatron.LIGHTWEIGHT_VALIDATION
+        token_bin = next(Path(args.output_folder).rglob("*.bin"))
+        token_bin.write_bytes(token_bin.read_bytes()[:-1])
+        with pytest.raises(ValueError, match="binary size disagrees"):
+            validate_megatron.validate_and_seal(args)
+        assert not (Path(args.output_folder) / "_SUCCESS.json").exists()
