@@ -42,11 +42,11 @@ def test_repo_context_configs_separate_clariden_and_rcp_paths():
         key for key in clariden | rcp if clariden.get(key) != rcp.get(key)
     }
     assert differing_keys == {
-        "EXECUTION_SITE",
         "PATH_TO_RAW_DATASET",
         "PATH_TO_OUTPUT_FOLDER",
     }
-    assert clariden["EXECUTION_SITE"] == "CLARIDEN"
+    assert "EXECUTION_SITE" not in clariden
+    assert "EXECUTION_SITE" not in rcp
     assert clariden["PATH_TO_RAW_DATASET"] == (
         "/capstor/store/cscs/swissai/infra01/datasets/"
         "stackv31_repo_context_4k_v1_processed"
@@ -55,7 +55,6 @@ def test_repo_context_configs_separate_clariden_and_rcp_paths():
         "/capstor/store/cscs/swissai/infra01/datasets/"
         "stackv31_repo_context_4k_v1_apertus_v2_tokenized"
     )
-    assert rcp["EXECUTION_SITE"] == "RCP"
     assert rcp["PATH_TO_RAW_DATASET"] == ("/mloscratch/stackv31-repo-context-4k-v1")
     assert rcp["PATH_TO_OUTPUT_FOLDER"] == (
         "/mloscratch/stackv31-repo-context-4k-v1_apertus_v2"
