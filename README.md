@@ -146,8 +146,11 @@ EXTENSION=.parquet # File extension. Almost always .parquet.
 # and divide the node CPUs between concurrent Datatrove workers.
 TOKENIZER_BATCH_SIZE=10000
 TOKENIZER_BATCH_BYTES=33554432
-TOKENIZER_WORKERS=$NUMBER_OF_DATATROVE_TASKS
-# Optional override; the default is min(144, CPUS_PER_TASK / TOKENIZER_WORKERS).
+# Optional override; the adaptive default is the minimum of 32, the configured
+# task count, and the number of files in each dump.
+# TOKENIZER_WORKERS=32
+# Optional override; the adaptive default is
+# min(144, CPUS_PER_TASK / effective workers).
 # TOKENIZER_THREADS=144
 ```
 
@@ -155,6 +158,9 @@ TOKENIZER_WORKERS=$NUMBER_OF_DATATROVE_TASKS
 either the document-count or UTF-8-byte limit. A single document larger than the
 limit is processed alone. Keep `TOKENIZER_WORKERS * TOKENIZER_THREADS` at or
 below `CPUS_PER_TASK` to avoid competing Rayon thread pools.
+The launcher also caps each dump's task count at its actual input-file count, so
+a single-file dump keeps one worker with up to 144 Rayon threads while larger
+dumps use the measured 32-worker topology.
 
 Sometimes individual tokenization jobs fail this can be inspected from dumps remaining in the dumps folder and not having been moved to the completed-dumps folder. In this case one should rerun the script with the `--dont_recompute_dumps` flag
 
