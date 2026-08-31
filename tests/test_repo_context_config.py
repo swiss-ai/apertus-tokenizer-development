@@ -48,12 +48,12 @@ def test_repo_context_configs_separate_clariden_and_rcp_paths():
     }
     assert clariden["EXECUTION_SITE"] == "CLARIDEN"
     assert clariden["PATH_TO_RAW_DATASET"] == (
-        "/capstor/store/cscs/swissai/infra01/datasets/swiss-ai/code/"
-        "stackv31-repo-context-4k-v1"
+        "/capstor/store/cscs/swissai/infra01/datasets/"
+        "stackv31_repo_context_4k_v1_processed"
     )
     assert clariden["PATH_TO_OUTPUT_FOLDER"] == (
-        "/capstor/store/cscs/swissai/infra01/datasets_tokenized/"
-        "stackv31-repo-context-4k-v1_apertus_v2"
+        "/capstor/store/cscs/swissai/infra01/datasets/"
+        "stackv31_repo_context_4k_v1_apertus_v2_tokenized"
     )
     assert rcp["EXECUTION_SITE"] == "RCP"
     assert rcp["PATH_TO_RAW_DATASET"] == ("/mloscratch/stackv31-repo-context-4k-v1")
