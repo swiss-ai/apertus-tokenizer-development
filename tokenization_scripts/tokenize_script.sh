@@ -41,23 +41,8 @@ PATH_TO_SLURM_LOGGING_DIR=$PATH_TO_OUTPUT_FOLDER/logs/slurm_logs                
 DATASET_OUTPUT_FOLDER_NAME=$PATH_TO_OUTPUT_FOLDER/$TOKENIZER_NAME/$DATASET_NAME             # Where tokenized data is stored
 TOKENIZER_BATCH_SIZE=${TOKENIZER_BATCH_SIZE:-10000}
 TOKENIZER_BATCH_BYTES=${TOKENIZER_BATCH_BYTES:-33554432}
-TOKENIZER_WORKERS=${TOKENIZER_WORKERS:-$NUMBER_OF_DATATROVE_TASKS}
-TOKENIZER_EFFECTIVE_WORKERS=$TOKENIZER_WORKERS
-if (( TOKENIZER_EFFECTIVE_WORKERS < 1 )); then
-  TOKENIZER_EFFECTIVE_WORKERS=$NUMBER_OF_DATATROVE_TASKS
-fi
-if (( TOKENIZER_EFFECTIVE_WORKERS > NUMBER_OF_DATATROVE_TASKS )); then
-  TOKENIZER_EFFECTIVE_WORKERS=$NUMBER_OF_DATATROVE_TASKS
-fi
-if [[ -z ${TOKENIZER_THREADS:-} ]]; then
-  TOKENIZER_THREADS=$((CPUS_PER_TASK / TOKENIZER_EFFECTIVE_WORKERS))
-  if (( TOKENIZER_THREADS > 144 )); then
-    TOKENIZER_THREADS=144
-  fi
-fi
-if (( TOKENIZER_THREADS < 1 )); then
-  TOKENIZER_THREADS=1
-fi
+TOKENIZER_WORKERS_OVERRIDE=${TOKENIZER_WORKERS:-}
+TOKENIZER_THREADS_OVERRIDE=${TOKENIZER_THREADS:-}
 
 if [ "$DONT_COMPUTE_DUMPS" -eq 0 ]; then
   mkdir -p $PATH_TO_PREPROCESSING_METADATA/completed-dumps #used later by tokenize.sh
@@ -77,5 +62,51 @@ for paths_file in "$PATH_TO_PREPROCESSING_METADATA/dumps"/*; do
   dump=$(grep -oP '(?<=paths_file_)\d+(?=\.txt)' <<<$paths_file)
   output_folder=$DATASET_OUTPUT_FOLDER_NAME/dump-$dump
   logging_dir=$PATH_TO_DATATROVE_LOGGING_DIR/$TOKENIZER_NAME/$DATASET_NAME/dump-$dump
-  sbatch $RES_OPT --partition=$PARTITION --account=$ACCOUNT --nodes=$NODES --gres=gpu:$GPUS --time=$TIME --cpus-per-task=$CPUS_PER_TASK $NO_REQUEUE --job-name=tokenize-$DATASET_NAME-dump-$dump --output=$PATH_TO_SLURM_LOGGING_DIR/R-%x-%j.out --error=$PATH_TO_SLURM_LOGGING_DIR/R-%x-%j.err tokenize.sh $PATH_TO_PREPROCESSING_METADATA/raw-dataset-link $output_folder $TOKENIZER $logging_dir $CSV_RESULTS_FILE $paths_file $NUMBER_OF_DATATROVE_TASKS $COLUMN_KEY $REHYDRATE_FLAG $EXTENSION $TOKENIZER_BATCH_SIZE $TOKENIZER_BATCH_BYTES $TOKENIZER_WORKERS $TOKENIZER_THREADS
+  file_count=$(awk 'NF { count++ } END { print count + 0 }' "$paths_file")
+  if (( file_count < 1 )); then
+    echo "Error: paths file $paths_file contains no input files."
+    exit 1
+  fi
+
+  tokenizer_tasks=$NUMBER_OF_DATATROVE_TASKS
+  if (( tokenizer_tasks > file_count )); then
+    tokenizer_tasks=$file_count
+  fi
+
+  if [[ -n $TOKENIZER_WORKERS_OVERRIDE ]]; then
+    tokenizer_workers=$TOKENIZER_WORKERS_OVERRIDE
+  else
+    tokenizer_workers=$tokenizer_tasks
+    if (( tokenizer_workers > 32 )); then
+      tokenizer_workers=32
+    fi
+  fi
+
+  effective_workers=$tokenizer_workers
+  if (( effective_workers < 1 )); then
+    effective_workers=$tokenizer_tasks
+    if (( effective_workers > 32 )); then
+      effective_workers=32
+    fi
+  fi
+  if (( effective_workers > tokenizer_tasks )); then
+    effective_workers=$tokenizer_tasks
+  fi
+  if (( effective_workers < 1 )); then
+    effective_workers=1
+  fi
+
+  if [[ -n $TOKENIZER_THREADS_OVERRIDE ]]; then
+    tokenizer_threads=$TOKENIZER_THREADS_OVERRIDE
+  else
+    tokenizer_threads=$((CPUS_PER_TASK / effective_workers))
+    if (( tokenizer_threads > 144 )); then
+      tokenizer_threads=144
+    fi
+  fi
+  if (( tokenizer_threads < 1 )); then
+    tokenizer_threads=1
+  fi
+
+  sbatch $RES_OPT --partition=$PARTITION --account=$ACCOUNT --nodes=$NODES --gres=gpu:$GPUS --time=$TIME --cpus-per-task=$CPUS_PER_TASK $NO_REQUEUE --job-name=tokenize-$DATASET_NAME-dump-$dump --output=$PATH_TO_SLURM_LOGGING_DIR/R-%x-%j.out --error=$PATH_TO_SLURM_LOGGING_DIR/R-%x-%j.err tokenize.sh $PATH_TO_PREPROCESSING_METADATA/raw-dataset-link $output_folder $TOKENIZER $logging_dir $CSV_RESULTS_FILE $paths_file $tokenizer_tasks $COLUMN_KEY $REHYDRATE_FLAG $EXTENSION $TOKENIZER_BATCH_SIZE $TOKENIZER_BATCH_BYTES $tokenizer_workers $tokenizer_threads
 done
