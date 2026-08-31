@@ -1,9 +1,9 @@
 import os
 import subprocess
+import sys
 import tempfile
 import unittest
 from pathlib import Path
-
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 TOKENIZATION_SCRIPTS = REPO_ROOT / "tokenization_scripts"
@@ -102,6 +102,31 @@ class TokenizationScriptTest(unittest.TestCase):
             ],
         )
         self.assertEqual(arguments[-4:], ["500", "16777216", "2", "64"])
+
+    def test_grouped_dump_size_uses_explicit_dataset_root(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            dataset = root / "prepared"
+            source = dataset / "examples" / "prose" / "part.parquet"
+            source.parent.mkdir(parents=True)
+            source.write_bytes(b"prepared-example")
+            paths = root / "metadata" / "dumps" / "prose" / "paths_file_0.txt"
+            paths.parent.mkdir(parents=True)
+            paths.write_text("examples/prose/part.parquet\n", encoding="utf-8")
+
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    str(TOKENIZATION_SCRIPTS / "compute_dump_size.py"),
+                    str(paths),
+                    str(dataset),
+                ],
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+
+            self.assertEqual(result.stdout.strip(), str(len(b"prepared-example")))
 
 
 if __name__ == "__main__":
