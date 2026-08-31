@@ -22,9 +22,21 @@ EXTENSION=${10:-.parquet}
 TOKENIZER_BATCH_SIZE=${11:-10000}
 TOKENIZER_BATCH_BYTES=${12:-33554432}
 TOKENIZER_WORKERS=${13:--1}
+file_count=$(awk 'NF { count++ } END { print count + 0 }' "$paths_file")
+if (( file_count < 1 )); then
+  echo "Error: paths file $paths_file contains no input files."
+  exit 1
+fi
+if (( number_of_tasks > file_count )); then
+  number_of_tasks=$file_count
+fi
 TOKENIZER_EFFECTIVE_WORKERS=$TOKENIZER_WORKERS
 if (( TOKENIZER_EFFECTIVE_WORKERS < 1 )); then
   TOKENIZER_EFFECTIVE_WORKERS=$number_of_tasks
+  if (( TOKENIZER_EFFECTIVE_WORKERS > 32 )); then
+    TOKENIZER_EFFECTIVE_WORKERS=32
+  fi
+  TOKENIZER_WORKERS=$TOKENIZER_EFFECTIVE_WORKERS
 fi
 if (( TOKENIZER_EFFECTIVE_WORKERS > number_of_tasks )); then
   TOKENIZER_EFFECTIVE_WORKERS=$number_of_tasks
@@ -87,8 +99,8 @@ bw=$(awk "BEGIN {print $dataset_total_size/$wc}")
 total_tokens_processed=$(($(du -shLcb $output_folder/*.bin | tail -n1 | sed -r 's/([^0-9]*([0-9]*)){1}.*/\2/') / 4))
 throughput=$(awk "BEGIN {print $total_tokens_processed/$wc}")
 
-echo "$SLURM_JOB_ID,$(hostname),$start_s,$end_s,$paths_file,$output_folder,$dataset_total_size,$processed_total_size,$number_of_tasks,$wc,$bw,$total_tokens_processed,$throughput"
-echo "$SLURM_JOB_ID,$(hostname),$start_s,$end_s,$paths_file,$output_folder,$dataset_total_size,$processed_total_size,$number_of_tasks,$wc,$bw,$total_tokens_processed,$throughput" >>$CSV_RESULTS_FILE
+echo "$SLURM_JOB_ID,$(hostname),$start_s,$end_s,$paths_file,$output_folder,$dataset_total_size,$processed_total_size,$TOKENIZER_WORKERS,$wc,$bw,$total_tokens_processed,$throughput"
+echo "$SLURM_JOB_ID,$(hostname),$start_s,$end_s,$paths_file,$output_folder,$dataset_total_size,$processed_total_size,$TOKENIZER_WORKERS,$wc,$bw,$total_tokens_processed,$throughput" >>$CSV_RESULTS_FILE
 
 sleep 10
 ls -lS $output_folder
