@@ -19,11 +19,33 @@ number_of_tasks=$7
 COLUMN_KEY=$8
 REHYDRATE_FLAG=${9}
 EXTENSION=${10:-.parquet}
+TOKENIZER_BATCH_SIZE=${11:-10000}
+TOKENIZER_BATCH_BYTES=${12:-33554432}
+TOKENIZER_WORKERS=${13:--1}
+TOKENIZER_EFFECTIVE_WORKERS=$TOKENIZER_WORKERS
+if (( TOKENIZER_EFFECTIVE_WORKERS < 1 )); then
+  TOKENIZER_EFFECTIVE_WORKERS=$number_of_tasks
+fi
+if (( TOKENIZER_EFFECTIVE_WORKERS > number_of_tasks )); then
+  TOKENIZER_EFFECTIVE_WORKERS=$number_of_tasks
+fi
+if [[ -n ${14:-} ]]; then
+  TOKENIZER_THREADS=$14
+else
+  TOKENIZER_THREADS=$((SLURM_CPUS_PER_TASK / TOKENIZER_EFFECTIVE_WORKERS))
+  if (( TOKENIZER_THREADS > 144 )); then
+    TOKENIZER_THREADS=144
+  fi
+fi
+if (( TOKENIZER_THREADS < 1 )); then
+  TOKENIZER_THREADS=1
+fi
 
 set -eo pipefail
 
 # Setup ENV
 export HF_HUB_ENABLE_HF_TRANSFER=0
+export RAYON_NUM_THREADS=$TOKENIZER_THREADS
 # Setup directories
 rm -rf $output_folder
 rm -rf $logging_dir
@@ -41,6 +63,9 @@ srun --environment=$ENV_FILE \
   --output-folder $output_folder \
   --logging-dir $logging_dir \
   --n-tasks $number_of_tasks \
+  --n-workers $TOKENIZER_WORKERS \
+  --batch-size $TOKENIZER_BATCH_SIZE \
+  --batch-bytes $TOKENIZER_BATCH_BYTES \
   --dataset $input_folder \
   --paths-file $paths_file \
   --column $COLUMN_KEY \
