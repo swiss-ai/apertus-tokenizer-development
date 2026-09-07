@@ -24,6 +24,7 @@ FILTERED_OUTPUT_ROOT = (
     "/capstor/store/cscs/swissai/infra01/datasets_tokenized/"
     "code_alchemy_filtered_apertus_v2"
 )
+TOKENIZED_PARENT = f"{FILTERED_OUTPUT_ROOT}/preliminary_mul_200k"
 
 
 def read_config(name):
@@ -69,6 +70,27 @@ class CodeAlchemyConfigTest(unittest.TestCase):
                     values["PATH_TO_PREPROCESSING_METADATA"],
                     f"{FILTERED_OUTPUT_ROOT}/{name}",
                 )
+
+    def test_subsets_expand_to_distinct_children_of_one_tokenized_parent(self):
+        expanded = {}
+        for name in RELEASED:
+            values = read_config(name)
+            expanded[name] = (
+                Path(values["PATH_TO_OUTPUT_FOLDER"])
+                / values["TOKENIZER_NAME"]
+                / values["DATASET_NAME"]
+            )
+
+        self.assertEqual(
+            expanded,
+            {
+                name: Path(TOKENIZED_PARENT) / f"codealchemy-{name}"
+                for name in RELEASED
+            },
+        )
+        self.assertEqual(
+            {path.parent for path in expanded.values()}, {Path(TOKENIZED_PARENT)}
+        )
 
     def test_no_config_names_a_superseded_root(self):
         superseded = ("code_alchemy_tokenization_ready", "code_alchemy_apertus_v2")
