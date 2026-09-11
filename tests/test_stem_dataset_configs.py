@@ -1,3 +1,4 @@
+import math
 import subprocess
 from pathlib import Path
 
@@ -27,6 +28,33 @@ RELEASES = {
 # Reservation SD-69241-apertus-1-5-0 is PartitionName=normal and inherits the
 # same cap, so any TIME above 12:00:00 on `normal` is rejected at submit.
 NORMAL_PARTITION_TIME_LIMIT_SECONDS = 12 * 3600
+
+# Token counts measured under preliminary_mul_200k (vocabulary 200064,
+# tokenizer.json sha256 cd403d3f219e2433e3f78b32644b8e6a6134668e15138e6546360330635a96b9)
+# over one upstream shard per stream. Superior-Reasoning is the one extrapolated
+# figure: its stage-1 JSONL is ordered and its measurable prefix is entirely
+# `domain: math`, so it carries the bio streams' +15% inflation applied to the
+# Marin count rather than a direct measurement.
+MEASURED_TOKENS = {
+    "biocorpus-upstream-text-v1": 10.14e9,
+    "superior-reasoning-apertus-inner-v1": 8.1e9,
+    "synthetic-1-unverified-apertus-inner-v1": 6.60e9,
+    "synthetic-1-verified-apertus-inner-v1": 2.78e9,
+    "thebiocollection-free-text-upstream-text-v1": 38.40e9,
+    "thebiocollection-instruction-upstream-text-v1": 20.83e9,
+}
+# Slowest 1x144 baseline rate implied by the PR #16 benchmark (Nemotron-V2:
+# 5.48M tok/s candidate over a 6.45x speedup).
+BASELINE_TOKENS_PER_SECOND = 0.850e6
+# The producing pipelines write `part-${rank}.parquet` through a ParquetWriter
+# with max_file_size 2 GiB, and TheBioCollection free-text alone is 32 upstream
+# shards / 14.84 GiB compressed, so every processed tree has many parts and
+# DUMPS_NUMBER=4096 gives one dump per part. Four is a pessimistic floor.
+ASSUMED_MINIMUM_DUMPS = 4
+WALL_TIME_MARGIN = 1.5
+# swe-rebench-v2-contree-upstream-text-v1 needed 1:00:00 raised to 3:00:00 under
+# this exact config shape (commit ba736f7), so nothing here gets the bare default.
+MINIMUM_WALL_TIME_HOURS = 2
 
 
 def _assignments(path: Path) -> dict[str, str]:
@@ -115,6 +143,14 @@ def test_stem_dataset_wall_times_are_sized_for_the_measured_corpus():
             config = _assignments(directory / f"{release}.cfg")
             assert config["TIME"] == expected_time
             assert config["DUMPS_NUMBER"] == "4096"
+
+
+def test_stem_dataset_wall_times_follow_the_documented_derivation():
+    for release, expected_time in RELEASES.items():
+        per_dump = MEASURED_TOKENS[release] / ASSUMED_MINIMUM_DUMPS
+        hours = per_dump / BASELINE_TOKENS_PER_SECOND / 3600
+        derived = max(MINIMUM_WALL_TIME_HOURS, math.ceil(hours * WALL_TIME_MARGIN))
+        assert expected_time == f"{derived}:00:00"
 
 
 def test_stem_dataset_wall_times_fit_the_normal_partition_limit():
