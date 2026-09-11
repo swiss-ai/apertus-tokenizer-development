@@ -14,13 +14,19 @@ TOKENIZATION_ROOT = (
 CLARIDEN_PROCESSED_ROOT = "/capstor/store/cscs/swissai/infra01/datasets"
 CLARIDEN_TOKENIZED_ROOT = "/capstor/store/cscs/swissai/infra01/datasets_tokenized"
 RELEASES = {
-    "biocorpus-upstream-text-v1": "4:00:00",
-    "superior-reasoning-apertus-inner-v1": "3:00:00",
+    "biocorpus-upstream-text-v1": "2:00:00",
+    "superior-reasoning-apertus-inner-v1": "2:00:00",
     "synthetic-1-unverified-apertus-inner-v1": "2:00:00",
     "synthetic-1-verified-apertus-inner-v1": "2:00:00",
-    "thebiocollection-free-text-upstream-text-v1": "14:00:00",
-    "thebiocollection-instruction-upstream-text-v1": "8:00:00",
+    "thebiocollection-free-text-upstream-text-v1": "5:00:00",
+    "thebiocollection-instruction-upstream-text-v1": "3:00:00",
 }
+# Clariden `sinfo` partition time limits, measured 2026-09-11:
+#     debug    1:30:00      normal*  12:00:00
+#     low      1-00:00:00   xfer     1-00:00:00
+# Reservation SD-69241-apertus-1-5-0 is PartitionName=normal and inherits the
+# same cap, so any TIME above 12:00:00 on `normal` is rejected at submit.
+NORMAL_PARTITION_TIME_LIMIT_SECONDS = 12 * 3600
 
 
 def _assignments(path: Path) -> dict[str, str]:
@@ -98,12 +104,29 @@ def test_stem_dataset_configs_do_not_encode_an_execution_site_flag():
             assert "TOKENIZATION_LAUNCH_BACKEND" not in config
 
 
+def _wall_time_seconds(value: str) -> int:
+    hours, minutes, seconds = (int(part) for part in value.split(":"))
+    return hours * 3600 + minutes * 60 + seconds
+
+
 def test_stem_dataset_wall_times_are_sized_for_the_measured_corpus():
     for release, expected_time in RELEASES.items():
         for directory in (CLARIDEN_CONFIGS, RCP_CONFIGS):
             config = _assignments(directory / f"{release}.cfg")
             assert config["TIME"] == expected_time
             assert config["DUMPS_NUMBER"] == "4096"
+
+
+def test_stem_dataset_wall_times_fit_the_normal_partition_limit():
+    for release in RELEASES:
+        for directory in (CLARIDEN_CONFIGS, RCP_CONFIGS):
+            config = _assignments(directory / f"{release}.cfg")
+            if config["PARTITION"] != "normal":
+                continue
+            assert (
+                _wall_time_seconds(config["TIME"])
+                <= NORMAL_PARTITION_TIME_LIMIT_SECONDS
+            )
 
 
 def test_stem_dataset_configs_are_valid_shell():
