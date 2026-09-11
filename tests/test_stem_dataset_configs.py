@@ -5,7 +5,7 @@ from pathlib import Path
 ROOT = Path(__file__).parents[1]
 CLARIDEN_CONFIGS = ROOT / "tokenization_scripts/configs_apertus_v2"
 RCP_CONFIGS = ROOT / "tokenization_scripts/configs_apertus_v2_rcp"
-PROCESSING_COMMIT = "0000000000000000000000000000000000000000"
+PROCESSING_COMMIT = "c0c24b40ec8581c31d70ebc1daa98f817fd2d6ab"
 PROCESSING_ROOT = (
     f"/mloscratch/apertus-stem-data/runs/stem-processing-{PROCESSING_COMMIT}-r1"
 )
