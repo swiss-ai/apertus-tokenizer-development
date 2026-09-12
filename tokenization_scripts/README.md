@@ -115,6 +115,19 @@ success the script writes `TOKENIZATION_MANIFEST.jsonl`, `CATEGORY_COUNTS.json`,
 `TOKENIZATION_RUN.json` and, last, a byte-identical `_SUCCESS.json` under
 `DATASET_OUTPUT_FOLDER_NAME`. It refuses to run if `_SUCCESS.json` already exists.
 
+### `validate_stem_direct.py`
+
+The six flat STEM datasets have a different input contract: their processing pipeline
+has already validated the Parquet tree, but it does not publish a grouped
+`examples/` manifest. After all dump workers finish, use `validate_stem_direct.py`
+instead of `validate_tokenization.sh`. Supply the processing `validation.json`,
+the flat processed root, the token output root, the dump-metadata root, the
+configured durable source-map root, the exact tokenizer and config, and the
+tokenizer implementation commit. The validator hashes the source and token
+payloads, checks every `.bin/.idx/.map` triple and source-row coordinate, and
+reconciles the sequence total with the processing report. It writes a distinct
+`stem-direct-tokenization-run/v1` seal, with `_SUCCESS.json` last.
+
 ### `prepare_dumps.py`
 
 `tokenize_script.sh` calls it with these arguments.
