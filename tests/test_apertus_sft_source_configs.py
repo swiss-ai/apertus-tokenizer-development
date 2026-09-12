@@ -32,6 +32,7 @@ class SourceConfigTests(unittest.TestCase):
             "PATH_TO_PREPROCESSING_METADATA=/old/meta\n"
             "PATH_TO_OUTPUT_FOLDER=/old/output\n"
             "DUMPS_NUMBER=8\n"
+            "NUMBER_OF_DATATROVE_TASKS=16\n"
             "REHYDRATE_FLAG=False\n"
             "EXTENSION=.parquet\n"
         )
@@ -74,6 +75,8 @@ class SourceConfigTests(unittest.TestCase):
             first_cfg,
         )
         self.assertIn(f"PATH_TO_OUTPUT_FOLDER={self.token}", first_cfg)
+        self.assertIn("DUMPS_NUMBER=1", first_cfg)
+        self.assertIn("NUMBER_OF_DATATROVE_TASKS=1", first_cfg)
         self.assertEqual(
             configs.generate(seal, self.text, self.token, self.template, self.cfg),
             result,
@@ -92,6 +95,12 @@ class SourceConfigTests(unittest.TestCase):
         other.write_text("{}")
         with self.assertRaises(ValueError):
             configs.generate(other, self.text, self.token, self.template, self.cfg)
+
+    def test_job_shape_scales_with_source_size(self):
+        self.assertEqual(configs.job_shape(88, 12), (1, 1))
+        self.assertEqual(configs.job_shape(200_000, 102), (4, 10))
+        self.assertEqual(configs.job_shape(666_344, 102), (8, 16))
+        self.assertEqual(configs.job_shape(666_344, 2), (2, 16))
 
 
 if __name__ == "__main__":
