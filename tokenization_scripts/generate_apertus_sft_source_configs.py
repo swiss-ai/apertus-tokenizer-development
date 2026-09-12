@@ -14,6 +14,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import math
 import os
 import re
 import shlex
@@ -27,7 +28,18 @@ REQUIRED_KEYS = {
     "PATH_TO_RAW_DATASET",
     "PATH_TO_PREPROCESSING_METADATA",
     "PATH_TO_OUTPUT_FOLDER",
+    "DUMPS_NUMBER",
+    "NUMBER_OF_DATATROVE_TASKS",
 }
+
+
+def job_shape(rows: int, parts: int) -> tuple[int, int]:
+    """Keep future retokenizations of tiny sources from spawning 8×16 work."""
+    if rows < 1 or parts < 1:
+        raise ValueError("cannot configure an empty source")
+    dumps = min(parts, 1 if rows < 100_000 else 4 if rows < 500_000 else 8)
+    tasks = min(16, max(1, math.ceil(rows / (dumps * 5_000))))
+    return dumps, tasks
 
 
 def sha256(path: Path) -> str:
@@ -107,10 +119,12 @@ def generate(
     for item in sources:
         slug = item["slug"]
         source_dir = text_root / "data" / slug
-        if not source_dir.is_dir() or not list(source_dir.glob("part-*.parquet")):
+        parts = list(source_dir.glob("part-*.parquet")) if source_dir.is_dir() else []
+        if not parts:
             raise ValueError(f"source-pure Parquet directory missing: {source_dir}")
         if item["rows"] < 1:
             raise ValueError(f"empty source in partition seal: {slug}")
+        dumps, tasks = job_shape(item["rows"], len(parts))
         # tokenize_script.sh writes to OUTPUT_FOLDER/TOKENIZER_NAME/DATASET_NAME
         # and stores per-run links, dumps, and CSVs under PREPROCESSING_METADATA.
         # Share only the output base; source identity remains a physical folder.
@@ -123,6 +137,8 @@ def generate(
                 "PATH_TO_RAW_DATASET": str(source_dir),
                 "PATH_TO_PREPROCESSING_METADATA": str(metadata),
                 "PATH_TO_OUTPUT_FOLDER": str(token_root),
+                "DUMPS_NUMBER": str(dumps),
+                "NUMBER_OF_DATATROVE_TASKS": str(tasks),
             },
         )
         path = config_dir / f"{slug}.cfg"
@@ -132,6 +148,9 @@ def generate(
                 "source": item["source"],
                 "slug": slug,
                 "rows": item["rows"],
+                "parts": len(parts),
+                "dumps": dumps,
+                "tasks_per_dump": tasks,
                 "config": path.name,
                 "config_sha256": sha256(path),
             }
