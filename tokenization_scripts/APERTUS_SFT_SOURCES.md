@@ -26,6 +26,13 @@ identical files and reject divergent ones. Review the generated configs before
 launching Slurm jobs; their template's reservation and resource settings are
 not inferred from the source partition.
 
+The generator scales the future retokenization shape from the sealed row count:
+one dump below 100k rows, four below 500k, eight otherwise (never more dumps
+than files), and up to 16 Datatrove tasks per dump at roughly one task per
+5,000 rows. This avoids eight GPU jobs for an 88-row source. The completed
+artifact is backfilled from existing token bytes, so no retokenization jobs
+are needed for this release.
+
 For the already sealed mixed token corpus, do **not** run these configs merely
 to make new weights possible. A lossless token-pair backfill can copy the
 original, **pre-reserve** `.bin` sequences into source-pure `.bin/.idx/.map`
