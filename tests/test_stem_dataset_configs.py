@@ -48,8 +48,9 @@ MEASURED_TOKENS = {
 BASELINE_TOKENS_PER_SECOND = 0.850e6
 # The producing pipelines write `part-${rank}.parquet` through a ParquetWriter
 # with max_file_size 2 GiB, and TheBioCollection free-text alone is 32 upstream
-# shards / 14.84 GiB compressed, so every processed tree has many parts and
-# DUMPS_NUMBER=4096 gives one dump per part. Four is a pessimistic floor.
+# shards / 14.84 GiB compressed, so every processed tree has many parts.
+# Sixteen dumps keep job-launch overhead bounded while preserving parallelism;
+# four is still a pessimistic floor for the wall-time calculation.
 ASSUMED_MINIMUM_DUMPS = 4
 WALL_TIME_MARGIN = 1.5
 # swe-rebench-v2-contree-upstream-text-v1 needed 1:00:00 raised to 3:00:00 under
@@ -142,7 +143,7 @@ def test_stem_dataset_wall_times_are_sized_for_the_measured_corpus():
         for directory in (CLARIDEN_CONFIGS, RCP_CONFIGS):
             config = _assignments(directory / f"{release}.cfg")
             assert config["TIME"] == expected_time
-            assert config["DUMPS_NUMBER"] == "4096"
+            assert config["DUMPS_NUMBER"] == "16"
 
 
 def test_stem_dataset_wall_times_follow_the_documented_derivation():
