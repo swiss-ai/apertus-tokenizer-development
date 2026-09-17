@@ -18,7 +18,9 @@ RELEASES = {
     "biocorpus-upstream-text-v1": "2:00:00",
     "superior-reasoning-apertus-inner-v1": "2:00:00",
     "synthetic-1-unverified-apertus-inner-v1": "2:00:00",
+    "synthetic-1-unverified-apertus-inner-v2": "2:00:00",
     "synthetic-1-verified-apertus-inner-v1": "2:00:00",
+    "synthetic-1-verified-apertus-inner-v2": "2:00:00",
     "thebiocollection-free-text-upstream-text-v1": "5:00:00",
     "thebiocollection-instruction-upstream-text-v1": "3:00:00",
 }
@@ -39,7 +41,15 @@ MEASURED_TOKENS = {
     "biocorpus-upstream-text-v1": 10.14e9,
     "superior-reasoning-apertus-inner-v1": 8.1e9,
     "synthetic-1-unverified-apertus-inner-v1": 6.60e9,
+    # The v2 identities are the v1 processed trees with the licence-excluded
+    # SYNTHETIC-1 collections removed, so their token counts are scaled from the
+    # v1 measurements by compressed processed bytes (0.403 and 0.799) rather
+    # than measured again. Bytes rather than rows: the excluded collections are
+    # not of average length, and StackExchange - which is most of what leaves
+    # the unverified stream - runs long.
+    "synthetic-1-unverified-apertus-inner-v2": 2.66e9,
     "synthetic-1-verified-apertus-inner-v1": 2.78e9,
+    "synthetic-1-verified-apertus-inner-v2": 2.22e9,
     "thebiocollection-free-text-upstream-text-v1": 38.40e9,
     "thebiocollection-instruction-upstream-text-v1": 20.83e9,
 }
@@ -68,7 +78,7 @@ def _assignments(path: Path) -> dict[str, str]:
 
 
 def test_stem_dataset_configs_are_paired_across_both_directories():
-    assert len(RELEASES) == 6
+    assert len(RELEASES) == 8
     clariden = {
         path.stem for path in CLARIDEN_CONFIGS.glob("*.cfg") if path.stem in RELEASES
     }
