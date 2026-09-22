@@ -91,6 +91,58 @@ class TokenizationScriptTest(unittest.TestCase):
         )
         self.assertEqual(arguments[-4:], ["10000", "33554432", "1", "288"])
 
+    def capture_worker_rayon_threads(self, forwarded_threads):
+        """Run tokenize.sh itself and report the RAYON_NUM_THREADS it exports."""
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            paths_file = root / "paths_file_0.txt"
+            paths_file.write_text("part.parquet\n", encoding="utf-8")
+            fake_bin = root / "bin"
+            fake_bin.mkdir()
+            capture = root / "rayon.txt"
+            fake_srun = fake_bin / "srun"
+            fake_srun.write_text(
+                '#!/bin/sh\nprintf "%s\\n" "${RAYON_NUM_THREADS-unset}" >> "$CAPTURE"\n',
+                encoding="utf-8",
+            )
+            fake_srun.chmod(0o755)
+            environment = os.environ.copy()
+            environment["PATH"] = f"{fake_bin}:{environment['PATH']}"
+            environment["CAPTURE"] = str(capture)
+            environment["SLURM_CPUS_PER_TASK"] = "288"
+
+            # The script continues into du/awk stats that need real tokenizer
+            # output, so its exit status is not the assertion here.
+            subprocess.run(
+                [
+                    "bash",
+                    str(TOKENIZATION_SCRIPTS / "tokenize.sh"),
+                    str(root / "input"),
+                    str(root / "output"),
+                    "tokenizer.json",
+                    str(root / "logs"),
+                    str(root / "results.csv"),
+                    str(paths_file),
+                    "4",
+                    "text",
+                    "False",
+                    ".parquet",
+                    "10000",
+                    "33554432",
+                    "4",
+                    forwarded_threads,
+                ],
+                cwd=TOKENIZATION_SCRIPTS,
+                env=environment,
+                check=False,
+                capture_output=True,
+                text=True,
+            )
+            return capture.read_text(encoding="utf-8").splitlines()[0]
+
+    def test_worker_script_honours_the_forwarded_thread_count(self):
+        self.assertEqual(self.capture_worker_rayon_threads("72"), "72")
+
     def test_explicit_runtime_controls_are_forwarded(self):
         arguments = self.capture_sbatch_arguments(
             tasks=4,
