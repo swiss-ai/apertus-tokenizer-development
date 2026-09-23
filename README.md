@@ -105,72 +105,19 @@ print(enc.tokens)               # ['<|user_start|>', 'hi', '<|user_end|>']
 Preliminary. All four folders prepend `<s>` and append `</s>` via their post-processor (when `add_special_tokens=True`). The `chat_template` is still not written, so `apply_chat_template` is unavailable.
 
 ## Tokenization at scale
-We will need the internal data-pipelines-pretrain for tokenization at scale (this in turn depends on datatrove). The following scripts use the necessary toml automatically. The only dependency that needs to be installed is data-pipelines-pretrain. To install it clone data-pipelin-pretrain to your home directory.
-```bash
-cd $HOME
-git clone git@github.com:swiss-ai/data-pipeline-pretrain.git 
-```
 
- 
+The production helpers live in `tokenization_scripts/` and require the internal
+`data-pipeline-pretrain` package plus its Datatrove and tokenizer dependencies.
 
-The helper scripts live in `./tokenization_scripts/`. The main entry point is `tokenize_script.sh`.
-
-Run from the `tokenization_scripts/` directory:
+On Clariden, run the Slurm orchestrator from the repository root with a config under
+`configs_apertus_v2/`:
 
 ```bash
-cd tokenization_scripts
-./tokenize_script.sh configs_apertus_v2/FineMath-CommonCrawl-subset.cfg
+config_path=tokenization_scripts/configs_apertus_v2/FineMath-CommonCrawl-subset.cfg
+./tokenization_scripts/tokenize_script.sh "$config_path"
 ```
 
-Or run directly from the repo root:
-```bash
-./tokenization_scripts/tokenize_script.sh configs_apertus_v2/FineMath-CommonCrawl-subset.cfg
-```
-
-Replace the example config with any config in `configs_apertus_v2/` as needed. The most important field is the DUMPS_NUMBER, set this according to the instructions below.
-
-The config fields that the user could modify are:
-```
-# task folders and key parameters config
-TOKENIZER=../preliminary_mul_200k/tokenizer.json
-TOKENIZER_NAME=preliminary_mul_200k
-DATASET_NAME=FineMath-CommonCrawl-subset
-COLUMN_KEY=text #change this to the appropriate column that stores the text
-PATH_TO_RAW_DATASET=/capstor/store/cscs/swissai/infra01/datasets/finemath_only_robots_v2 # change this to the path of the raw data
-PATH_TO_PREPROCESSING_METADATA=/capstor/store/cscs/swissai/infra01/datasets_tokenized/finemath-filterrobots_fine_apertus_v2 # Where dumps are stored
-PATH_TO_OUTPUT_FOLDER=/capstor/store/cscs/swissai/infra01/datasets_tokenized/finemath-filterrobots_fine_apertus_v2          # Where outputs are saved
-DUMPS_NUMBER=35 # This needs to be (size of dataset in GB)/(2GB) for example for a dataset of size 100GB DUMPS_NUMBER=50
-REHYDRATE_FLAG=False # Some datasets need to be rehydrated (upsampled after deduplication) typically these are the fw2 datasets which are globally deduplicated, but there are others. Check the excel sheet.
-EXTENSION=.parquet # File extension. Almost always .parquet.
-# Optional safety and concurrency controls. These defaults bound tokenizer memory
-# and divide the node CPUs between concurrent Datatrove workers.
-TOKENIZER_BATCH_SIZE=10000
-TOKENIZER_BATCH_BYTES=33554432
-TOKENIZER_WORKERS=$NUMBER_OF_DATATROVE_TASKS
-# Optional override; the default is min(144, CPUS_PER_TASK / TOKENIZER_WORKERS).
-# TOKENIZER_THREADS=144
-```
-
-`TOKENIZER_BATCH_BYTES` is the primary memory guard: a tokenizer call closes at
-either the document-count or UTF-8-byte limit. A single document larger than the
-limit is processed alone. Keep `TOKENIZER_WORKERS * TOKENIZER_THREADS` at or
-below `CPUS_PER_TASK` to avoid competing Rayon thread pools.
-
-Sometimes individual tokenization jobs fail this can be inspected from dumps remaining in the dumps folder and not having been moved to the completed-dumps folder. In this case one should rerun the script with the `--dont_recompute_dumps` flag
-
-```
-./tokenize_script.sh configs_apertus_v2/fineopus-filtered-stage5.cfg --dont_compute_dumps
-```
-.
-
-The outputs at the target folder are
-```
-completed-dumps/
-dumps/
-logs/
-preliminary_mul_200k/
-raw-dataset-link@        --> /capstor/store/cscs/swissai/infra01/datasets/finepdfs-edu_spp_annotated
-tokenize-preliminary_mul_200k-FinePDFs-edu-english.csv
-tokenized-dir-link@      --> preliminary_mul_200k/FinePDFs-edu-english
-```
-`dumps` contains the unfinished dumps, and `completed-dumps` contains the finished dumps, note that these are only text files describing the dumps and not the actual dumps themselves. Tokenized artifacts are generated in the `preliminary_mul_200k` folder. The `logs` folder can also be inspected for any errors or warning during the tokenization process. 
+The orchestrator accepts `--prepare-only` and `--dont_compute_dumps`. Manifest-backed
+grouping, exact token-length guards, direct RCP workers, validation/sealing, recovery,
+all config fields, and the separate RCP config directory are documented in the
+[tokenization pipeline runbook](tokenization_scripts/README.md).
