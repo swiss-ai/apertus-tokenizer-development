@@ -88,7 +88,7 @@ preprocess_command=(
 if [ "$TOKENIZATION_LAUNCH_BACKEND" = rcp ]; then
   "${preprocess_command[@]}"
 elif [ "$TOKENIZATION_LAUNCH_BACKEND" = slurm ]; then
-  srun --environment="$ENV_FILE" numactl --membind=0-3 "${preprocess_command[@]}"
+  srun --ntasks=1 --environment="$ENV_FILE" numactl --membind=0-3 "${preprocess_command[@]}"
 else
   echo "Unsupported tokenization launch backend: $TOKENIZATION_LAUNCH_BACKEND" >&2
   exit 1
