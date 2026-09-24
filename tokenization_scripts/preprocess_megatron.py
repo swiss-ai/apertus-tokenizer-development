@@ -101,6 +101,14 @@ def get_args(argv=None):
         help="Column used as the document id. Default: id",
     )
     group.add_argument(
+        "--token-map-source-root",
+        default="",
+        help=(
+            "Optional durable dataset root recorded in provenance maps instead of "
+            "the physical read root"
+        ),
+    )
+    group.add_argument(
         "--rehydrate",
         type=str,
         default="False",
@@ -163,6 +171,9 @@ def main(args):
             paths_file=args.paths_file,
             text_key=args.column,
             id_key=getattr(args, "id_column", "id"),
+            provenance_dataset_root=(
+                getattr(args, "token_map_source_root", "") or None
+            ),
         )
         write_source_map = True
 
@@ -175,9 +186,7 @@ def main(args):
 
         reason_column = getattr(args, "include_reason_column", "")
         if not reason_column:
-            raise ValueError(
-                "include boolean column requires an include reason column"
-            )
+            raise ValueError("include boolean column requires an include reason column")
         selection_steps.append(
             MetadataInclusionFilter(
                 include_column=include_column,

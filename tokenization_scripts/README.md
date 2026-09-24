@@ -235,6 +235,8 @@ The config is sourced as shell, so do not put untrusted content in it.
 - `DATASET_NAME`: dataset name used in output paths, job names and metadata.
 - `COLUMN_KEY`: source text column.
 - `ID_COLUMN`: source identifier column; defaults to `id`.
+- `TOKEN_MAP_SOURCE_ROOT`: optional durable processed-data root recorded in source
+  maps when it differs from the physical read root.
 - `PATH_TO_RAW_DATASET`: input root.
 - `PATH_TO_OUTPUT_FOLDER`: output and log root.
 - `PATH_TO_PREPROCESSING_METADATA`: dump manifests, completion state and symlinks.
