@@ -1,9 +1,9 @@
 import os
 import subprocess
+import sys
 import tempfile
 import unittest
 from pathlib import Path
-
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 TOKENIZATION_SCRIPTS = REPO_ROOT / "tokenization_scripts"
@@ -95,8 +95,39 @@ class TokenizationScriptTest(unittest.TestCase):
         """Run tokenize.sh itself and report the RAYON_NUM_THREADS it exports."""
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
-            paths_file = root / "paths_file_0.txt"
+            metadata = root / "metadata"
+            (metadata / "dumps").mkdir(parents=True)
+            paths_file = metadata / "dumps" / "paths_file_0.txt"
             paths_file.write_text("part.parquet\n", encoding="utf-8")
+            output = root / "output"
+            output.mkdir()
+            config = root / "config.cfg"
+            config.write_text(
+                "\n".join(
+                    [
+                        "TOKENIZER=/unused/tokenizer.json",
+                        "TOKENIZER_NAME=test-tokenizer",
+                        "DATASET_NAME=test-data",
+                        "COLUMN_KEY=text",
+                        "PATH_TO_RAW_DATASET=/unused",
+                        f"PATH_TO_PREPROCESSING_METADATA={metadata}",
+                        f"PATH_TO_OUTPUT_FOLDER={output}",
+                        "DUMPS_NUMBER=1",
+                        "REHYDRATE_FLAG=False",
+                        "EXTENSION=.parquet",
+                        "NUMBER_OF_DATATROVE_TASKS=4",
+                        "ACCOUNT=test",
+                        "NODES=1",
+                        "GPUS=0",
+                        "CPUS_PER_TASK=288",
+                        'NO_REQUEUE="--no-requeue"',
+                        "TIME=00:10:00",
+                        "PARTITION=test",
+                    ]
+                )
+                + "\n",
+                encoding="utf-8",
+            )
             fake_bin = root / "bin"
             fake_bin.mkdir()
             capture = root / "rayon.txt"
@@ -117,16 +148,11 @@ class TokenizationScriptTest(unittest.TestCase):
                 [
                     "bash",
                     str(TOKENIZATION_SCRIPTS / "tokenize.sh"),
-                    str(root / "input"),
-                    str(root / "output"),
-                    "tokenizer.json",
+                    str(config),
+                    str(output / "dump-0"),
                     str(root / "logs"),
-                    str(root / "results.csv"),
                     str(paths_file),
-                    "4",
-                    "text",
-                    "False",
-                    ".parquet",
+                    str(metadata / "completed-dumps"),
                     "10000",
                     "33554432",
                     "4",
@@ -154,6 +180,31 @@ class TokenizationScriptTest(unittest.TestCase):
             ],
         )
         self.assertEqual(arguments[-4:], ["500", "16777216", "2", "64"])
+
+    def test_grouped_dump_size_uses_explicit_dataset_root(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            dataset = root / "prepared"
+            source = dataset / "examples" / "prose" / "part.parquet"
+            source.parent.mkdir(parents=True)
+            source.write_bytes(b"prepared-example")
+            paths = root / "metadata" / "dumps" / "prose" / "paths_file_0.txt"
+            paths.parent.mkdir(parents=True)
+            paths.write_text("examples/prose/part.parquet\n", encoding="utf-8")
+
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    str(TOKENIZATION_SCRIPTS / "compute_dump_size.py"),
+                    str(paths),
+                    str(dataset),
+                ],
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+
+            self.assertEqual(result.stdout.strip(), str(len(b"prepared-example")))
 
 
 if __name__ == "__main__":
