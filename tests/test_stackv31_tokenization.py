@@ -50,6 +50,7 @@ class Stackv31TokenizationTest(unittest.TestCase):
             tokenizer.pre_tokenizer = Whitespace()
             tokenizer.save(str(tokenizer_path))
             output = root / "tokens"
+            logical_source_root = "/capstor/final/processed-source"
             preprocess_megatron.main(
                 argparse.Namespace(
                     tokenizer_name_or_path=str(tokenizer_path),
@@ -62,6 +63,7 @@ class Stackv31TokenizationTest(unittest.TestCase):
                     paths_file=str(paths),
                     column="content",
                     id_column="content_id",
+                    token_map_source_root=logical_source_root,
                     rehydrate="False",
                     extension=".parquet",
                     include_boolean_column="apertus_include",
@@ -75,6 +77,9 @@ class Stackv31TokenizationTest(unittest.TestCase):
             self.assertEqual(token_map["manifest"]["sequence_count"], 2)
             self.assertNotIn("pipeline", token_map["manifest"])
             self.assertEqual(token_map["manifest"]["text_column"], "content")
+            self.assertEqual(
+                token_map["manifest"]["raw_dataset_root"], logical_source_root
+            )
 
     def test_configured_exact_sequence_limit_fails_before_tokenization(self):
         with tempfile.TemporaryDirectory() as temporary:
