@@ -70,6 +70,19 @@ On success it writes the following files under `DATASET_OUTPUT_FOLDER_NAME`:
 Do not create or copy `_SUCCESS.json` manually. Validation must cover every prepared
 source file exactly once before the marker is published.
 
+### `validate_stem_direct.py`
+
+The six flat STEM datasets have a different input contract: their processing pipeline
+has already validated the Parquet tree, but it does not publish a grouped
+`examples/` manifest. After all dump workers finish, use `validate_stem_direct.py`
+instead of `validate_tokenization.sh`. Supply the processing `validation.json`,
+the flat processed root, the token output root, the dump-metadata root, the
+configured durable source-map root, the exact tokenizer and config, and the
+tokenizer implementation commit. The validator hashes the source and token
+payloads, checks every `.bin/.idx/.map` triple and source-row coordinate, and
+reconciles the sequence total with the processing report. It writes a distinct
+`stem-direct-tokenization-run/v1` seal, with `_SUCCESS.json` last.
+
 ### Lower-level Python commands
 
 `prepare_dumps.py`, `preprocess_megatron.py`, and `validate_megatron.py` expose their
