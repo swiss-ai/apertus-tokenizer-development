@@ -704,25 +704,92 @@ def validate_and_seal(args: argparse.Namespace) -> dict[str, Any]:
 
 def get_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--dataset", required=True)
-    parser.add_argument("--manifest", required=True)
-    parser.add_argument("--dataset-marker", required=True)
-    parser.add_argument("--output-folder", required=True)
-    parser.add_argument("--tokenizer", required=True)
-    parser.add_argument("--config", required=True)
-    parser.add_argument("--implementation-commit", required=True)
-    parser.add_argument("--validator-commit", required=True)
-    parser.add_argument("--dataset-name", required=True)
-    parser.add_argument("--tokenizer-name", required=True)
-    parser.add_argument("--text-column", default="text")
-    parser.add_argument("--id-column", default="id")
-    parser.add_argument("--expected-categories", required=True)
-    parser.add_argument("--max-sequence-tokens", type=int, required=True)
-    parser.add_argument("--workers", type=int, default=8)
+    parser.add_argument(
+        "--dataset",
+        required=True,
+        help="Prepared dataset root; every token map must record this root",
+    )
+    parser.add_argument(
+        "--manifest",
+        required=True,
+        help="Prepared examples manifest (JSONL) listing every source Parquet file",
+    )
+    parser.add_argument(
+        "--dataset-marker",
+        required=True,
+        help="Prepared-dataset completion marker that pins the manifest digest",
+    )
+    parser.add_argument(
+        "--output-folder",
+        required=True,
+        help="Token output root to validate and seal",
+    )
+    parser.add_argument(
+        "--tokenizer",
+        required=True,
+        help="tokenizer.json used for tokenization; its digest must match the maps",
+    )
+    parser.add_argument(
+        "--config",
+        required=True,
+        help="Tokenization config file; its digest is recorded in the seal",
+    )
+    parser.add_argument(
+        "--implementation-commit",
+        required=True,
+        help="Full 40-character commit of the tokenizer code that produced the output",
+    )
+    parser.add_argument(
+        "--validator-commit",
+        required=True,
+        help="Full 40-character commit of this validator",
+    )
+    parser.add_argument(
+        "--dataset-name",
+        required=True,
+        help="Dataset name recorded in the seal",
+    )
+    parser.add_argument(
+        "--tokenizer-name",
+        required=True,
+        help="Tokenizer name recorded in the seal",
+    )
+    parser.add_argument(
+        "--text-column",
+        default="text",
+        help="Text column the token maps must record. Default: text",
+    )
+    parser.add_argument(
+        "--id-column",
+        default="id",
+        help="Identifier column the token maps must record. Default: id",
+    )
+    parser.add_argument(
+        "--expected-categories",
+        required=True,
+        help="Comma-separated categories; must equal the manifest and output top level",
+    )
+    parser.add_argument(
+        "--max-sequence-tokens",
+        type=int,
+        required=True,
+        help="Maximum tokens per sequence; must be positive",
+    )
+    parser.add_argument(
+        "--workers",
+        type=int,
+        default=8,
+        help="Parallel pair-validation processes. Default: 8",
+    )
     parser.add_argument(
         "--validation-mode",
         choices=sorted(VALIDATION_MODES),
         default=STRICT_VALIDATION,
+        help=(
+            "strict also hashes source Parquet, .bin and .idx files and checks index "
+            "offsets; "
+            "lightweight_infrastructure skips those hashes. Default: strict"
+        ),
     )
     return parser.parse_args()
 

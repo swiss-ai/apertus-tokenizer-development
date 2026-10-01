@@ -106,8 +106,15 @@ Preliminary. All four folders prepend `<s>` and append `</s>` via their post-pro
 
 ## Tokenization at scale
 
-The production helpers live in `tokenization_scripts/` and require the internal
-`data-pipeline-pretrain` package plus its Datatrove and tokenizer dependencies.
+The production helpers live in `tokenization_scripts/`. They need a
+`data-pipeline-pretrain` checkout at `$HOME/data-pipeline-pretrain` on Clariden, which
+`tokenization_scripts/env.toml` mounts into the container. The provenance readers come
+from data-pipeline-pretrain PR #37, so check out its branch `token-source-maps` until it
+merges:
+
+```bash
+git clone -b token-source-maps git@github.com:swiss-ai/data-pipeline-pretrain.git "$HOME/data-pipeline-pretrain"
+```
 
 On Clariden, run the Slurm orchestrator from the repository root with a config under
 `configs_apertus_v2/`:
@@ -117,7 +124,6 @@ config_path=tokenization_scripts/configs_apertus_v2/FineMath-CommonCrawl-subset.
 ./tokenization_scripts/tokenize_script.sh "$config_path"
 ```
 
-The orchestrator accepts `--prepare-only` and `--dont_compute_dumps`. Manifest-backed
-grouping, exact token-length guards, direct RCP workers, validation/sealing, recovery,
-all config fields, and the separate RCP config directory are documented in the
-[tokenization pipeline runbook](tokenization_scripts/README.md).
+The orchestrator accepts `--prepare-only` and `--dont_compute_dumps`. Arguments, config
+keys, validation and RCP use are documented in
+[`tokenization_scripts/README.md`](tokenization_scripts/README.md).

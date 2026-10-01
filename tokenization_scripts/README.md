@@ -1,15 +1,51 @@
-# Tokenization pipeline runbook
+# Tokenization scripts
 
-These scripts prepare Parquet inputs, tokenize them into Megatron `.bin/.idx` pairs,
-write source maps, and optionally validate and seal a manifest-backed grouped dataset.
-Clariden is the primary execution environment and uses the built-in Slurm submission
-path. RCP is a secondary environment that uses explicit `runai submit` jobs; this
-repository intentionally does not provide an RCP launcher.
+These scripts split Parquet inputs into dumps, tokenize each dump into Megatron
+`.bin/.idx` pairs with `.map` source maps, and validate and seal a manifest-backed
+grouped output. Clariden runs them through Slurm. RCP runs the same scripts as
+explicit `runai submit` jobs.
 
-Run commands from a pinned repository checkout. The Python environment must contain
-`data-pipeline-pretrain` and its Datatrove, PyArrow, NumPy, and tokenizer dependencies.
-When `data-pipeline-pretrain` is not installed as a package, add its `src` directory to
-`PYTHONPATH` in every preparation, worker, and validation job.
+## Requirements
+
+- A `data-pipeline-pretrain` checkout on branch `token-source-maps` (PR #37). On
+  Clariden, `env.toml` mounts it from `$HOME/data-pipeline-pretrain`; see the top-level
+  README for the clone command. Elsewhere, put its `src` directory on `PYTHONPATH` in
+  every preparation, worker and validation job.
+- The tokenizer payload. The `tokenizer.json` files are stored in Git LFS, so fetch the
+  one the config names before running:
+
+  ```bash
+  git lfs install
+  git lfs pull --include preliminary_mul_200k/tokenizer.json
+  ```
+
+  A relative `TOKENIZER` path resolves from `tokenization_scripts/`. Validation compares
+  the tokenizer's SHA-256 with the digest in every source map, so validate with the same
+  file that tokenized the data.
+
+## Clariden
+
+Run from the repository root:
+
+```bash
+config_path=tokenization_scripts/configs_apertus_v2/stackv31-repo-context-4k-v1.cfg
+./tokenization_scripts/tokenize_script.sh "$config_path"                 # prepare and submit
+./tokenization_scripts/tokenize_script.sh "$config_path" --prepare-only  # prepare only
+./tokenization_scripts/tokenize_script.sh "$config_path" --dont_compute_dumps  # resubmit unfinished dumps
+```
+
+Preparation runs `prepare_dumps.py` through `srun --partition=debug
+--account="$ACCOUNT"`. The `debug` partition is hard-coded in `tokenize_script.sh`. Each
+dump worker is then submitted with `sbatch`, using `ACCOUNT`, `PARTITION`, `NODES`,
+`TIME`, `CPUS_PER_TASK`, `GPUS`, `NO_REQUEUE` and `RESERVATION` from the config.
+
+After every worker has succeeded, validate and seal the output from a compute
+allocation with at least `TOKENIZATION_VALIDATION_WORKERS` CPUs:
+
+```bash
+srun -A <account> --cpus-per-task=<cpus> --environment=tokenization_scripts/env.toml \
+  ./tokenization_scripts/validate_tokenization.sh "$config_path"
+```
 
 ## Entry points
 
@@ -19,14 +55,11 @@ When `data-pipeline-pretrain` is not installed as a package, add its `src` direc
 tokenize_script.sh <config-file> [--dont_compute_dumps] [--prepare-only]
 ```
 
-This is the normal Clariden entry point. It loads the config, checks any required
-input marker, prepares path manifests, and submits one Slurm job per dump.
-
-- `--prepare-only` creates the dump manifests and directory links, then exits without
-  submitting tokenization workers. This is also the preparation phase used on RCP.
-- `--dont_compute_dumps` skips preparation and submits only the path manifests still
-  present under `PATH_TO_PREPROCESSING_METADATA/dumps`. A successful worker moves its
-  path manifest to `completed-dumps`, so this flag is suitable for bounded retries.
+| argument | meaning |
+|---|---|
+| `<config-file>` | Config to source. |
+| `--prepare-only` | Create the dump manifests and directory links, then exit without submitting workers. |
+| `--dont_compute_dumps` | Skip preparation and submit only the path manifests still under `PATH_TO_PREPROCESSING_METADATA/dumps`. |
 
 ### `tokenize.sh`
 
@@ -35,19 +68,25 @@ tokenize.sh <config-file> <output-folder> <logging-dir> <paths-file> \
   [completed-folder] [batch-size] [batch-bytes] [workers] [threads]
 ```
 
-This is the worker entry point submitted by `tokenize_script.sh` on Clariden and
-submitted directly with `runai submit` on RCP. It deletes only the dump-scoped output
-and logging directories passed to it, tokenizes the exact files in `paths-file`, and
-moves that path manifest to `completed-folder` only after success. Never run two
-workers for the same dump concurrently.
+This is the per-dump worker. It deletes and recreates `<output-folder>` and
+`<logging-dir>`, tokenizes the files listed in `<paths-file>`, and moves `<paths-file>`
+to `<completed-folder>` after success. Never run two workers for the same dump at once.
 
-`TOKENIZATION_LAUNCH_BACKEND` controls how commands execute inside the current job:
+| position | argument | overrides config key | default when omitted or empty |
+|---|---|---|---|
+| 1 | `config-file` | | required |
+| 2 | `output-folder` | | required; passed as `--output-folder` |
+| 3 | `logging-dir` | | required; passed as `--logging-dir` |
+| 4 | `paths-file` | | required; passed as `--paths-file` |
+| 5 | `completed-folder` | | `completed-dumps/` in the parent of the directory that holds `paths-file` |
+| 6 | `batch-size` | `TOKENIZER_BATCH_SIZE` | config value, else `10000` |
+| 7 | `batch-bytes` | `TOKENIZER_BATCH_BYTES` | config value, else `33554432` |
+| 8 | `workers` | `TOKENIZER_WORKERS` | config value, else `NUMBER_OF_DATATROVE_TASKS` |
+| 9 | `threads` | `TOKENIZER_THREADS` | config value, else `SLURM_CPUS_PER_TASK` (or `CPUS_PER_TASK`) divided by the workers, capped at 144 |
 
-- unset or `slurm`: use `srun` with `env.toml`;
-- `rcp`: invoke Python directly in the prepared container environment.
-
-It is not a cluster selector or launcher. There is deliberately no `EXECUTION_SITE`
-setting; the selected config paths and the submission command determine the site.
+`threads` sets `RAYON_NUM_THREADS`. `TOKENIZATION_LAUNCH_BACKEND` selects how the Python
+step runs: `slurm` (the default) uses `srun --environment=env.toml`, and `rcp` runs
+Python directly in the current container.
 
 ### `validate_tokenization.sh`
 
@@ -55,250 +94,220 @@ setting; the selected config paths and the submission command determine the site
 validate_tokenization.sh <config-file> [implementation-commit]
 ```
 
-This validates a completed manifest-backed grouped tokenization and publishes its seal.
-If `implementation-commit` is omitted, the current tokenizer-repository commit is used.
-The wrapper derives all other arguments from the config and calls
-`validate_megatron.py`.
+| argument | meaning |
+|---|---|
+| `<config-file>` | Config used for tokenization. |
+| `[implementation-commit]` | Full 40-character commit of the tokenizer code that produced the output. Defaults to `HEAD` of this checkout. |
 
-On success it writes the following files under `DATASET_OUTPUT_FOLDER_NAME`:
+The script runs under `set -u` and calls `validate_megatron.py`. Besides the keys every
+config sets, the config must define these keys, which `tokenize_script.sh` treats as
+optional:
 
-- `TOKENIZATION_MANIFEST.jsonl`;
-- `CATEGORY_COUNTS.json`;
-- `TOKENIZATION_RUN.json`;
-- byte-identical `_SUCCESS.json`, written last.
+| key | requirement |
+|---|---|
+| `DATASET_MANIFEST` | Existing JSONL examples manifest. |
+| `REQUIRED_DATASET_MARKER` | Existing completion marker with `complete: true`, `smoke: false` and `pins.examples_manifest_sha256` equal to the manifest's SHA-256. |
+| `EXPECTED_GROUP_HEADS` | Non-empty comma-separated categories. |
+| `MAX_SEQUENCE_TOKENS` | Positive integer. |
 
-Do not create or copy `_SUCCESS.json` manually. Validation must cover every prepared
-source file exactly once before the marker is published.
+The output must be grouped as `<category>/[...]/dump-<id>/<rank>_tokens.{bin,idx,map}`. On
+success the script writes `TOKENIZATION_MANIFEST.jsonl`, `CATEGORY_COUNTS.json`,
+`TOKENIZATION_RUN.json` and, last, a byte-identical `_SUCCESS.json` under
+`DATASET_OUTPUT_FOLDER_NAME`. It refuses to run if `_SUCCESS.json` already exists.
 
-### Lower-level Python commands
+### `prepare_dumps.py`
 
-`prepare_dumps.py`, `preprocess_megatron.py`, and `validate_megatron.py` expose their
-complete argument lists through `--help`. Prefer the shell entry points for production
-runs because they consistently resolve configs, tokenizer paths, output layout, and
-validation metadata.
+`tokenize_script.sh` calls it with these arguments.
 
-## Primary environment: Clariden
+| argument | default | set from | meaning |
+|---|---|---|---|
+| `--dataset-folder` | required | `PATH_TO_RAW_DATASET` | Root scanned recursively for `.parquet` files, or the root that manifest paths are relative to. |
+| `--preprocessing-metadata-folder` | required | `PATH_TO_PREPROCESSING_METADATA` | Receives `dumps/` and the `raw-dataset-link` symlink. |
+| `--n-dumps` | automatic | `DUMPS_NUMBER` | Dumps per group, capped at the group's file count. |
+| `--max-dump-bytes` | `150000000000` | `MAX_DUMP_BYTES` | Without `--n-dumps`, each group gets ceil(group bytes / this value) dumps. |
+| `--manifest` | none | `DATASET_MANIFEST` | JSONL inventory; only listed files are admitted. |
+| `--manifest-path-key` | `relative_path` | `MANIFEST_PATH_KEY` | Manifest field holding the path relative to `--dataset-folder`. |
+| `--group-fields` | empty | `DUMP_GROUP_FIELDS` | Comma-separated fields that become nested output directories. Requires `--manifest`. |
+| `--group-metadata` | empty | `DUMP_GROUP_METADATA` | JSON object or array that supplies group fields missing from the manifest. |
+| `--group-metadata-root` | empty | `DUMP_GROUP_METADATA_ROOT` | Top-level key that holds the metadata entries. |
+| `--group-metadata-lookup-field` | empty | `DUMP_GROUP_METADATA_LOOKUP_FIELD` | Manifest field whose value selects a metadata entry. Required with `--group-metadata`. |
+| `--group-metadata-id-field` | `id` | `DUMP_GROUP_METADATA_ID_FIELD` | Identifier field when the metadata is an array. |
+| `--expected-groups` | `0` (off) | `EXPECTED_GROUP_COUNT` | Fail unless grouping yields exactly this many groups. |
+| `--expected-group-heads` | empty | `EXPECTED_GROUP_HEADS` | Fail unless the first group components equal this comma-separated set. |
+| `--filter-in` | none | not passed | Keep only paths containing one of these substrings. |
+| `--filter-out` | none | not passed | Drop paths containing any of these substrings. |
 
-Configs under `configs_apertus_v2/` use Clariden-visible paths and Slurm resources.
-From the repository root:
+### `preprocess_megatron.py`
+
+`tokenize.sh` calls it with these arguments.
+
+| argument | default | set from | meaning |
+|---|---|---|---|
+| `--tokenizer-name-or-path` | required | `TOKENIZER` | Tokenizer file or Hugging Face model id. |
+| `--eos-token` | none | not passed | EOS token appended after each document. |
+| `--batch-size` | `10000` | position 6 | Maximum documents per tokenizer call. |
+| `--batch-bytes` | `33554432` | position 7 | Maximum UTF-8 input bytes per tokenizer call. |
+| `--output-folder` | required | position 2 | Output directory for the token pairs and maps. |
+| `--logging-dir` | none | position 3 | Datatrove logging directory. |
+| `--n-tasks` | `8` | `NUMBER_OF_DATATROVE_TASKS` | Datatrove tasks, capped at the number of files in the paths file. One output rank per task. |
+| `--n-workers` | `-1` (equal to `--n-tasks`) | position 8 | Concurrently running tasks. |
+| `--dataset` | required | `PATH_TO_PREPROCESSING_METADATA/raw-dataset-link` | Root the paths file is relative to. |
+| `--paths-file` | required | position 4 | One input path per line. |
+| `--column` | `text` | `COLUMN_KEY` | Text column. |
+| `--id-column` | `id` | `ID_COLUMN` | Document identifier column. |
+| `--rehydrate` | `False` | `REHYDRATE_FLAG` | `true`, `1` or `yes` applies the rehydrater. |
+| `--extension` | `.parquet` | `EXTENSION` | Input extension. A value containing `jsonl` uses the JSONL reader and writes no source maps. |
+| `--include-boolean-column` | empty | `INCLUDE_BOOLEAN_COLUMN` | Boolean column that selects rows. Parquet only, and requires `--include-reason-column`. |
+| `--include-reason-column` | empty | `INCLUDE_REASON_COLUMN` | Reason column paired with the boolean column. |
+| `--included-reason` | `included` | `INCLUDED_REASON` | Reason value of included rows; may be empty. |
+| `--max-sequence-tokens` | `0` (off) | `MAX_SEQUENCE_TOKENS` | Fail when a tokenized sequence exceeds this length. |
+
+### `validate_megatron.py`
+
+`validate_tokenization.sh` calls it with these arguments.
+
+| argument | default | set from | meaning |
+|---|---|---|---|
+| `--dataset` | required | `PATH_TO_RAW_DATASET` | Prepared dataset root. Every map must record a root that resolves to the same path, otherwise it fails with "wrong prepared root". |
+| `--manifest` | required | `DATASET_MANIFEST` | Prepared examples manifest. |
+| `--dataset-marker` | required | `REQUIRED_DATASET_MARKER` | Prepared-dataset completion marker. |
+| `--output-folder` | required | `DATASET_OUTPUT_FOLDER_NAME` | Token output root to validate and seal. |
+| `--tokenizer` | required | `TOKENIZER` | `tokenizer.json` used for tokenization. |
+| `--config` | required | the config file | Config whose SHA-256 is recorded in the seal. |
+| `--implementation-commit` | required | position 2, else `HEAD` | Commit of the tokenizer code that produced the output. |
+| `--validator-commit` | required | `HEAD` of this checkout | Commit of the validator. |
+| `--dataset-name` | required | `DATASET_NAME` | Dataset name recorded in the seal. |
+| `--tokenizer-name` | required | `TOKENIZER_NAME` | Tokenizer name recorded in the seal. |
+| `--text-column` | `text` | `COLUMN_KEY` | Text column every map must record. |
+| `--id-column` | `id` | `ID_COLUMN` | Identifier column every map must record. |
+| `--expected-categories` | required | `EXPECTED_GROUP_HEADS` | Categories the manifest and the output's top level must equal. |
+| `--max-sequence-tokens` | required | `MAX_SEQUENCE_TOKENS` | Maximum tokens per sequence. |
+| `--workers` | `8` | `TOKENIZATION_VALIDATION_WORKERS` | Parallel validation processes. |
+| `--validation-mode` | `strict` | `TOKENIZATION_VALIDATION_MODE` | `strict` or `lightweight_infrastructure`, see below. |
+
+## RCP
+
+Configs under `configs_apertus_v2_rcp/` use RCP `/mloscratch` paths. Every job uses the
+same template; all paths after `--command --` must be absolute and visible in the
+container:
 
 ```bash
-config_path=tokenization_scripts/configs_apertus_v2/FineMath-CommonCrawl-subset.cfg
-./tokenization_scripts/tokenize_script.sh "$config_path"
-```
-
-For the sealed Stack v3.1 repository-context dataset:
-
-```bash
-config_path=tokenization_scripts/configs_apertus_v2/stackv31-repo-context-4k-v1.cfg
-./tokenization_scripts/tokenize_script.sh "$config_path"
-```
-
-The entry point prepares dumps with `srun` and submits workers with `sbatch`. Slurm
-account, partition, node, CPU, GPU, time, reservation, and requeue settings come from
-the config. After every worker succeeds, validate and seal the output from a Clariden
-compute allocation, not a login node:
-
-```bash
-srun --environment=tokenization_scripts/env.toml \
-  ./tokenization_scripts/validate_tokenization.sh "$config_path"
-```
-
-Request at least `TOKENIZATION_VALIDATION_WORKERS` CPUs and enough memory for the
-selected validation mode when creating the allocation.
-
-To prepare without submission, or to retry only unfinished dumps:
-
-```bash
-./tokenization_scripts/tokenize_script.sh "$config_path" --prepare-only
-./tokenization_scripts/tokenize_script.sh "$config_path" --dont_compute_dumps
-```
-
-## Secondary environment
-
-<details>
-<summary>RCP workflow with direct <code>runai submit</code> jobs</summary>
-
-### Overview
-
-Configs under `configs_apertus_v2_rcp/` contain RCP `/mloscratch` paths. All paths
-passed after `--command --` must be absolute paths visible inside the container and
-mounted PVC. Pin the container image, tokenizer checkout, data-pipeline-pretrain
-checkout, config, tokenizer payload, and implementation commits before launching.
-
-The templates below intentionally use placeholders because RunAI project names,
-images, PVC claims, and checkout locations are operator-specific.
-
-### 1. Prepare dump manifests
-
-Run preparation in a bounded RunAI job. `--prepare-only` is essential: the shell
-orchestrator's submission phase is Slurm-only.
-
-```bash
-runai submit -p <project> \
-  --name <prepare-job> \
-  --image <pinned-image> \
-  --gpu 0 --cpu 4 --memory 32G \
-  --node-pools <cpu-capable-pool> --backoff-limit 1 \
+runai submit -p <project> --name <job> --image <image> \
+  --gpu 0 --cpu <cpus> --memory <memory> --node-pools <cpu-pool> --backoff-limit 1 \
   --existing-pvc claimname=<scratch-claim>,path=/mloscratch \
   --run-as-uid <uid> --run-as-gid <gid> \
   --environment USER=<user> --environment LOGNAME=<user> \
-  --environment PATH=<runtime-venv>/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin \
+  --environment PATH=<venv>/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin \
+  --environment PYTHONPATH=<data-pipeline-pretrain-checkout>/src \
   --environment TOKENIZATION_LAUNCH_BACKEND=rcp \
-  --environment PYTHONPATH=<data-pipeline-pretrain-checkout>/src \
-  --command -- /bin/bash \
-  <tokenizer-checkout>/tokenization_scripts/tokenize_script.sh \
-  <tokenizer-checkout>/tokenization_scripts/configs_apertus_v2_rcp/<dataset>.cfg \
-  --prepare-only
+  --environment SLURM_JOB_ID=rcp-<job> \
+  --command -- /bin/bash <tokenizer-checkout>/tokenization_scripts/<script> <arguments>
 ```
 
-Require the preparation job to succeed before enumerating
-`PATH_TO_PREPROCESSING_METADATA/dumps/**/paths_file_*.txt`. Treat those files as the
-exact worker inventory.
+Run the steps in order, and start each one only after the previous one has succeeded:
 
-### 2. Submit one worker per dump
+| step | `<script> <arguments>` |
+|---|---|
+| prepare | `tokenize_script.sh <config> --prepare-only` |
+| tokenize, one job per `PATH_TO_PREPROCESSING_METADATA/dumps/**/paths_file_<id>.txt` | `tokenize.sh <config> <output> <logging> <paths-file> <completed> <batch-size> <batch-bytes> <workers> <threads>` |
+| validate | `validate_tokenization.sh <config> <implementation-commit>` |
 
-Derive the dump-scoped output, logging, and completion paths exactly as
-`tokenize_script.sh` does. For a grouped dump they are:
+Derive the worker paths as `tokenize_script.sh` does, where `<group>` is the path of
+the paths file's directory relative to `dumps/` (empty for ungrouped dumps):
 
-```text
-output     = DATASET_OUTPUT_FOLDER_NAME/<group>/dump-<dump-id>
-logging    = PATH_TO_OUTPUT_FOLDER/logs/datatrove_logs/TOKENIZER_NAME/DATASET_NAME/<group>/dump-<dump-id>
-completed  = PATH_TO_PREPROCESSING_METADATA/completed-dumps/<group>
-```
+| argument | path |
+|---|---|
+| `<output>` | `DATASET_OUTPUT_FOLDER_NAME/<group>/dump-<id>` |
+| `<logging>` | `PATH_TO_OUTPUT_FOLDER/logs/datatrove_logs/TOKENIZER_NAME/DATASET_NAME/<group>/dump-<id>` |
+| `<completed>` | `PATH_TO_PREPROCESSING_METADATA/completed-dumps/<group>` |
 
-Submit each distinct path manifest once:
-
-```bash
-runai submit -p <project> \
-  --name <unique-dump-job> \
-  --image <pinned-image> \
-  --gpu 0 --cpu <worker-cpus> --memory <worker-memory> \
-  --node-pools <cpu-capable-pool> --backoff-limit 1 \
-  --existing-pvc claimname=<scratch-claim>,path=/mloscratch \
-  --run-as-uid <uid> --run-as-gid <gid> \
-  --environment USER=<user> --environment LOGNAME=<user> \
-  --environment PATH=<runtime-venv>/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin \
-  --environment TOKENIZATION_LAUNCH_BACKEND=rcp \
-  --environment PYTHONPATH=<data-pipeline-pretrain-checkout>/src \
-  --environment SLURM_JOB_ID=rcp-<unique-dump-job> \
-  --command -- /bin/bash \
-  <tokenizer-checkout>/tokenization_scripts/tokenize.sh \
-  <absolute-config> <absolute-output> <absolute-logging> <absolute-paths-file> \
-  <absolute-completed-folder> <batch-size> <batch-bytes> <workers> <threads>
-```
-
-`SLURM_JOB_ID` is compatibility metadata consumed by the shared statistics output; it
-does not make the job a Slurm job. Ensure `workers * threads` does not exceed the CPUs
-allocated to the RunAI job. Use the same config and path manifest for a bounded retry;
-the worker safely replaces only its own dump-scoped output.
-
-### 3. Validate and seal
-
-After every expected path manifest has moved to `completed-dumps`, submit a separate
-validation job using the same pinned environment:
-
-```bash
-runai submit -p <project> \
-  --name <validation-job> \
-  --image <pinned-image> \
-  --gpu 0 --cpu <validation-cpus> --memory <validation-memory> \
-  --node-pools <cpu-capable-pool> --backoff-limit 1 \
-  --existing-pvc claimname=<scratch-claim>,path=/mloscratch \
-  --run-as-uid <uid> --run-as-gid <gid> \
-  --environment USER=<user> --environment LOGNAME=<user> \
-  --environment PATH=<runtime-venv>/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin \
-  --environment PYTHONPATH=<data-pipeline-pretrain-checkout>/src \
-  --command -- /bin/bash \
-  <tokenizer-checkout>/tokenization_scripts/validate_tokenization.sh \
-  <absolute-config> <tokenization-implementation-commit>
-```
-
-Require the job to succeed, require `TOKENIZATION_RUN.json` and `_SUCCESS.json` to be
-byte-identical, and verify the recorded config, tokenizer, implementation, source
-marker, manifest, category, rank, world-size, and byte totals before admitting or
-transferring the artifact.
-
-</details>
+Keep `<workers> * <threads>` at or below `<cpus>`. `SLURM_JOB_ID` only labels the
+worker's row in the statistics CSV.
 
 ## Configuration reference
 
-The config is sourced as shell syntax. Do not put untrusted content in a config.
+The config is sourced as shell, so do not put untrusted content in it.
 
 ### Dataset and output identity
 
 - `TOKENIZER`: tokenizer JSON path. Relative paths resolve from `tokenization_scripts/`.
-- `TOKENIZER_NAME`: stable output and metadata name for the tokenizer.
-- `DATASET_NAME`: stable dataset/job name.
+- `TOKENIZER_NAME`: tokenizer name used in output paths and metadata.
+- `DATASET_NAME`: dataset name used in output paths, job names and metadata.
 - `COLUMN_KEY`: source text column.
 - `ID_COLUMN`: source identifier column; defaults to `id`.
-- `PATH_TO_RAW_DATASET`: input root visible on the selected cluster.
-- `PATH_TO_OUTPUT_FOLDER`: output/log root.
-- `PATH_TO_PREPROCESSING_METADATA`: dump manifests, completion state, and symlinks.
-- `DATASET_OUTPUT_FOLDER_NAME`: optional exact token payload root; otherwise defaults to
+- `PATH_TO_RAW_DATASET`: input root.
+- `PATH_TO_OUTPUT_FOLDER`: output and log root.
+- `PATH_TO_PREPROCESSING_METADATA`: dump manifests, completion state and symlinks.
+- `DATASET_OUTPUT_FOLDER_NAME`: token output root; defaults to
   `PATH_TO_OUTPUT_FOLDER/TOKENIZER_NAME/DATASET_NAME`.
 
 ### Input admission and dump layout
 
-- `REQUIRED_DATASET_MARKER`: optional marker that must exist before preparation.
+- `REQUIRED_DATASET_MARKER`: optional file that must exist before preparation.
 - `DATASET_MANIFEST`: optional JSONL source inventory. When set, only listed files are
   admitted.
 - `MANIFEST_PATH_KEY`: manifest field containing a path relative to the dataset root;
   defaults to `relative_path`.
 - `DUMPS_NUMBER`: optional fixed dump count per group.
-- `MAX_DUMP_BYTES`: target upper bytes per automatically sized dump.
-- `DUMP_GROUP_FIELDS`: comma-separated manifest/lookup fields mirrored into output
+- `MAX_DUMP_BYTES`: target maximum bytes per automatically sized dump; defaults to
+  `150000000000`.
+- `DUMP_GROUP_FIELDS`: comma-separated manifest or metadata fields mirrored into output
   directories.
 - `DUMP_GROUP_METADATA`, `DUMP_GROUP_METADATA_ROOT`,
-  `DUMP_GROUP_METADATA_LOOKUP_FIELD`, and `DUMP_GROUP_METADATA_ID_FIELD`: optional JSON
-  lookup used when grouping values are outside the source manifest.
-- `EXPECTED_GROUP_COUNT` and `EXPECTED_GROUP_HEADS`: fail-closed grouping assertions.
+  `DUMP_GROUP_METADATA_LOOKUP_FIELD` and `DUMP_GROUP_METADATA_ID_FIELD`: optional JSON
+  lookup for group fields that are not in the manifest.
+- `EXPECTED_GROUP_COUNT` and `EXPECTED_GROUP_HEADS`: grouping assertions; preparation
+  fails when they do not match.
 
 ### Row selection and tokenization limits
 
-- `INCLUDE_BOOLEAN_COLUMN`: optional boolean column controlling row admission.
-- `INCLUDE_REASON_COLUMN`: optional exclusion/admission reason column paired with the
-  boolean column.
-- `INCLUDED_REASON`: exact reason value for included rows; it may intentionally be
+- `INCLUDE_BOOLEAN_COLUMN`: optional boolean column that selects rows.
+- `INCLUDE_REASON_COLUMN`: reason column paired with the boolean column.
+- `INCLUDED_REASON`: reason value of included rows; defaults to `included` and may be
   empty.
 - `REHYDRATE_FLAG`: whether to apply the data-pipeline rehydrater.
-- `EXTENSION`: source extension, normally `.parquet`.
-- `MAX_SEQUENCE_TOKENS`: exact per-example token ceiling; `0` disables the guard.
-- `NUMBER_OF_DATATROVE_TASKS`: output task/rank count.
-- `TOKENIZER_BATCH_SIZE`: maximum documents per tokenizer call.
-- `TOKENIZER_BATCH_BYTES`: maximum UTF-8 input bytes per tokenizer call.
+- `EXTENSION`: source extension; defaults to `.parquet`.
+- `MAX_SEQUENCE_TOKENS`: per-sequence token ceiling; `0` (the default) disables it.
+- `NUMBER_OF_DATATROVE_TASKS`: Datatrove tasks, and therefore output ranks, per dump.
+- `TOKENIZER_BATCH_SIZE`: maximum documents per tokenizer call; defaults to `10000`.
+- `TOKENIZER_BATCH_BYTES`: maximum UTF-8 input bytes per tokenizer call; defaults to
+  `33554432`. A single larger document is processed alone.
 - `TOKENIZER_WORKERS`: concurrent Datatrove workers; defaults to the task count.
-- `TOKENIZER_THREADS`: Rayon threads per worker. The default is bounded by the allocated
-  CPU count and 144 threads.
+- `TOKENIZER_THREADS`: Rayon threads per worker; defaults to the allocated CPUs divided
+  by the workers, capped at 144. Keep `TOKENIZER_WORKERS * TOKENIZER_THREADS` at or
+  below `CPUS_PER_TASK`.
 
 ### Validation and Clariden submission
 
-- `TOKENIZATION_VALIDATION_WORKERS`: validation process count; defaults to `8`.
-- `TOKENIZATION_VALIDATION_MODE`: `strict` or `lightweight_infrastructure`. Strict mode
-  hashes prepared Parquet and token/index payloads. Lightweight mode still validates
-  exact inventory, sizes, Parquet footer identity, rank/world-size completeness,
-  `.bin/.idx/.map` structure, source coverage, and sequence lengths, but avoids a second
-  full payload hash pass.
-- `ACCOUNT`, `NODES`, `PARTITION`, `TIME`, `CPUS_PER_TASK`, `GPUS`, `NO_REQUEUE`, and
-  optional `RESERVATION` configure the Clariden Slurm submission path. RCP resources
-  are selected explicitly on each `runai submit` command.
+- `TOKENIZATION_VALIDATION_WORKERS`: validation processes; defaults to `8`.
+- `TOKENIZATION_VALIDATION_MODE`: `strict` (the default) or
+  `lightweight_infrastructure`. Strict mode hashes the prepared Parquet files and the
+  `.bin` and `.idx` files and checks every index offset. Lightweight mode skips those
+  hashes and offset checks but still checks inventory, sizes, Parquet footers,
+  rank completeness, `.bin/.idx/.map` structure, source coverage and sequence lengths.
+- `ACCOUNT`, `PARTITION`, `NODES`, `TIME`, `CPUS_PER_TASK`, `GPUS`, `NO_REQUEUE` (a raw
+  `sbatch` flag such as `--no-requeue`) and optional `RESERVATION`: `sbatch` options for
+  the workers. Preparation uses only `ACCOUNT`.
 
-## Output and recovery contract
+## Output and recovery
 
 Preparation creates these paths under `PATH_TO_PREPROCESSING_METADATA`:
 
 ```text
 dumps/                    # path manifests not yet completed
-completed-dumps/          # manifests moved here after successful tokenization
+completed-dumps/          # path manifests moved here after successful tokenization
 raw-dataset-link          # symlink to PATH_TO_RAW_DATASET
 tokenized-dir-link        # symlink to DATASET_OUTPUT_FOLDER_NAME
 ```
 
-Token outputs live under `DATASET_OUTPUT_FOLDER_NAME`, optionally grouped into nested
-directories and then `dump-<id>` directories. Logs live under
-`PATH_TO_OUTPUT_FOLDER/logs`.
+Every submission, including `--dont_compute_dumps`, rewrites
+`tokenize-<TOKENIZER_NAME>-<DATASET_NAME>.csv` with a header row, and each worker
+appends one row of statistics.
 
-For recovery, inspect the scheduler state and logs first. Resubmit only failed dumps
-whose path manifests remain under `dumps`; never regenerate dumps while workers from
-the previous inventory are active. Run validation only after the expected worker set is
-complete, and treat the final `_SUCCESS.json` as the admission marker.
+Token outputs live under `DATASET_OUTPUT_FOLDER_NAME`, optionally in group directories,
+then in `dump-<id>` directories. Logs live under `PATH_TO_OUTPUT_FOLDER/logs`.
+
+To recover, resubmit with `--dont_compute_dumps`: only the path manifests still under
+`dumps/` are submitted. Do not regenerate dumps while workers from the previous
+inventory are running. Run validation only after every path manifest has moved to
+`completed-dumps/`.
