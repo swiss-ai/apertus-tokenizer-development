@@ -2,7 +2,7 @@
 """Generate one ordinary tokenizer config per sealed Apertus SFT source.
 
 The source partition manifest is produced by data-pipeline-pretrain's
-`pipelines/apertus-sft-pretrain/partition_sources.py`. Keeping this generator
+`pipelines/apertus-sft-pretrain/main_3_partition_sources.py`. Keeping this generator
 next to `tokenize_script.sh` avoids introducing a second tokenization path:
 each config simply points that existing launcher at one source-pure Parquet
 directory. The already-tokenized mixed release is backfilled separately without
@@ -174,16 +174,39 @@ def generate(
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--partition-manifest", type=Path, required=True)
-    parser.add_argument("--text-root", type=Path, required=True)
-    parser.add_argument("--token-root", type=Path, required=True)
+    parser.add_argument(
+        "--partition-manifest",
+        type=Path,
+        required=True,
+        help="_SOURCE_PARTITION_SUCCESS.json seal; must be byte-identical to the "
+        "copy in --text-root",
+    )
+    parser.add_argument(
+        "--text-root",
+        type=Path,
+        required=True,
+        help="Absolute source-partition root containing data/<slug>/part-*.parquet",
+    )
+    parser.add_argument(
+        "--token-root",
+        type=Path,
+        required=True,
+        help="Absolute token output root written into every config",
+    )
     parser.add_argument(
         "--template",
         type=Path,
         default=Path(__file__).resolve().parent
         / "configs_apertus_v2/Apertus-1.5-SFT-mix-pretrain-v1.cfg",
+        help="Config copied for every source with the per-source keys replaced. "
+        "Default: configs_apertus_v2/Apertus-1.5-SFT-mix-pretrain-v1.cfg",
     )
-    parser.add_argument("--config-dir", type=Path, required=True)
+    parser.add_argument(
+        "--config-dir",
+        type=Path,
+        required=True,
+        help="Directory that receives <slug>.cfg files and _CONFIGS_SUCCESS.json",
+    )
     args = parser.parse_args()
     result = generate(
         args.partition_manifest,

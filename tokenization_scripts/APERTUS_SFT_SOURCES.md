@@ -1,47 +1,51 @@
 # Source-separated Apertus SFT tokenization
 
-The original `Apertus-1.5-SFT-mix-pretrain-v1.cfg` remains the immutable recipe
-for the already tokenized mixed artifact. For future runs that need independent
-weights for each constituent source, first run
-`data-pipeline-pretrain/pipelines/apertus-sft-pretrain/partition_sources.py` and
-publish its sealed, source-pure Parquet root. Then generate ordinary tokenizer
-configs from that manifest:
+`generate_apertus_sft_source_configs.py` writes one ordinary `tokenize_script.sh`
+config per source of the Apertus 1.5 SFT pretraining text. Its input is the sealed,
+source-pure Parquet root written by data-pipeline-pretrain's
+`pipelines/apertus-sft-pretrain/main_3_partition_sources.py`.
+
+## Generate the configs
 
 ```bash
 python3 tokenization_scripts/generate_apertus_sft_source_configs.py \
   --partition-manifest /capstor/.../Apertus-1.5-SFT-mix-pretrain-v1-by-source/_SOURCE_PARTITION_SUCCESS.json \
   --text-root /capstor/.../Apertus-1.5-SFT-mix-pretrain-v1-by-source \
   --token-root /capstor/.../datasets_tokenized/Apertus-1.5-SFT-mix-pretrain-v1-by-source_apertus_v2 \
-  --config-dir /path/to/generated-apertus-sft-configs
+  --config-dir <config-dir>
 ```
 
-Every generated config points `PATH_TO_RAW_DATASET` at exactly one
-`data/<stable-source-slug>` directory and gives that source a distinct
-`DATASET_NAME` and preprocessing-metadata folder. The existing launcher writes
-token pairs below `<token-root>/preliminary_mul_200k/<slug>/dump-*`, so each
-source has its own sampler-addressable token path. They use the existing `tokenize_script.sh`;
-there is no new tokenizer. `_CONFIGS_SUCCESS.json` pins the input partition
-seal, template, source labels, config hashes, and output paths. Reruns accept
-identical files and reject divergent ones. Review the generated configs before
-launching Slurm jobs; their template's reservation and resource settings are
-not inferred from the source partition.
+| argument | default | meaning |
+|---|---|---|
+| `--partition-manifest` | required | `_SOURCE_PARTITION_SUCCESS.json` seal. It must be byte-identical to the copy in `--text-root`. |
+| `--text-root` | required | Absolute source-partition root containing `data/<slug>/part-*.parquet`. |
+| `--token-root` | required | Absolute token output root. |
+| `--template` | `tokenization_scripts/configs_apertus_v2/Apertus-1.5-SFT-mix-pretrain-v1.cfg` | Config copied for every source. It must assign the six keys below, which are replaced; every other line, including the Slurm settings, is copied unchanged. |
+| `--config-dir` | required | Receives one `<slug>.cfg` per source and `_CONFIGS_SUCCESS.json`. |
 
-The generator scales the future retokenization shape from the sealed row count:
-one dump below 100k rows, four below 500k, eight otherwise (never more dumps
-than files), and up to 16 Datatrove tasks per dump at roughly one task per
-5,000 rows. This avoids eight GPU jobs for an 88-row source. The completed
-artifact is backfilled from existing token bytes, so no retokenization jobs
-are needed for this release.
+Each generated config sets:
 
-For the already sealed mixed token corpus, do **not** run these configs merely
-to make new weights possible. A lossless token-pair backfill can copy the
-original, **pre-reserve** `.bin` sequences into source-pure `.bin/.idx/.map`
-groups, conserving token bytes. Run the ordinary long-context reserve policy
-again on the **whole** source-separated token root. The reserve splitter keeps
-relative source paths in both kept and held-back outputs, so source roots stay
-sampler-addressable without 35 independent reserve jobs. This retains the
-existing corpus-level 10% policy; record realized held-back counts per source
-before choosing weights. The historical mixed reserve is not reused. The backfill uses
-the `PairSplitPlan` code in the separate `lc-reserve` PR and is kept as an
-operational script outside this repo because this draft PR is based on a
-branch without that splitter. Do not point the sampler at unsealed output.
+| key | value |
+|---|---|
+| `DATASET_NAME` | `<slug>` |
+| `PATH_TO_RAW_DATASET` | `<text-root>/data/<slug>` |
+| `PATH_TO_PREPROCESSING_METADATA` | `<token-root>/_preprocessing/<slug>` |
+| `PATH_TO_OUTPUT_FOLDER` | `<token-root>` |
+| `DUMPS_NUMBER` | 1 below 100,000 rows, 4 below 500,000 rows, otherwise 8; never more than the source's Parquet parts |
+| `NUMBER_OF_DATATROVE_TASKS` | ceil(rows / (dumps * 5,000)), between 1 and 16 |
+
+`_CONFIGS_SUCCESS.json` records the SHA-256 of the partition seal, of the template and
+of every generated config, plus each source's label, rows, parts and job shape. A rerun
+accepts files identical to the existing ones and fails on any difference.
+
+## Tokenize
+
+Review the generated configs, then submit each one from `tokenization_scripts/`, which
+the launcher requires as its working directory:
+
+```bash
+cd tokenization_scripts
+./tokenize_script.sh <config-dir>/<slug>.cfg
+```
+
+Token pairs land in `<token-root>/preliminary_mul_200k/<slug>/dump-*`.
