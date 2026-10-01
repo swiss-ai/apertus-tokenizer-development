@@ -280,18 +280,69 @@ def validate(args: argparse.Namespace) -> dict:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--dataset", required=True)
-    parser.add_argument("--dataset-name", required=True)
-    parser.add_argument("--metadata-root", required=True)
-    parser.add_argument("--output-folder", required=True)
-    parser.add_argument("--processing-report", required=True)
-    parser.add_argument("--tokenizer", required=True)
-    parser.add_argument("--config", required=True)
-    parser.add_argument("--durable-source-root", required=True)
-    parser.add_argument("--implementation-commit", required=True)
-    parser.add_argument("--validator-commit", required=True)
-    parser.add_argument("--expected-dumps", type=int, required=True)
-    parser.add_argument("--workers", type=int, default=8)
+    parser.add_argument(
+        "--dataset",
+        required=True,
+        help="Flat processed Parquet root that was tokenized (PATH_TO_RAW_DATASET)",
+    )
+    parser.add_argument(
+        "--dataset-name",
+        required=True,
+        help="Dataset identity; must equal the processing report's identity",
+    )
+    parser.add_argument(
+        "--metadata-root",
+        required=True,
+        help="Dump metadata root holding dumps/ and completed-dumps/ "
+        "(PATH_TO_PREPROCESSING_METADATA)",
+    )
+    parser.add_argument(
+        "--output-folder",
+        required=True,
+        help="Token output root holding only the dump-<n> directories",
+    )
+    parser.add_argument(
+        "--processing-report",
+        required=True,
+        help="JSON report of the processing pipeline's validation step",
+    )
+    parser.add_argument(
+        "--tokenizer",
+        required=True,
+        help="tokenizer.json used for tokenization",
+    )
+    parser.add_argument(
+        "--config",
+        required=True,
+        help="Tokenization config; its SHA-256 is recorded in the seal",
+    )
+    parser.add_argument(
+        "--durable-source-root",
+        required=True,
+        help="Root every token map must record, exactly (TOKEN_MAP_SOURCE_ROOT)",
+    )
+    parser.add_argument(
+        "--implementation-commit",
+        required=True,
+        help="Full 40-character commit of the tokenizer code that produced the output",
+    )
+    parser.add_argument(
+        "--validator-commit",
+        required=True,
+        help="Full 40-character commit of this validator",
+    )
+    parser.add_argument(
+        "--expected-dumps",
+        type=int,
+        required=True,
+        help="Number of completed dumps, numbered 0..N-1 (DUMPS_NUMBER)",
+    )
+    parser.add_argument(
+        "--workers",
+        type=int,
+        default=8,
+        help="Parallel validation processes. Default: 8",
+    )
     args = parser.parse_args()
     print(json.dumps(validate(args), sort_keys=True, indent=2))
 
