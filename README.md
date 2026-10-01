@@ -124,7 +124,7 @@ cd tokenization_scripts
 
 Or run directly from the repo root:
 ```bash
-./tokenization_scripts/tokenize_script.sh configs_apertus_v2/FineMath-CommonCrawl-subset.cfg
+./tokenization_scripts/tokenize_script.sh tokenization_scripts/configs_apertus_v2/FineMath-CommonCrawl-subset.cfg
 ```
 
 Replace the example config with any config in `configs_apertus_v2/` as needed. The most important field is the DUMPS_NUMBER, set this according to the instructions below.
@@ -160,9 +160,9 @@ limit is processed alone. Keep `TOKENIZER_WORKERS * TOKENIZER_THREADS` at or
 below `CPUS_PER_TASK` to avoid competing Rayon thread pools.
 The launcher also caps each dump's task count at its actual input-file count, so
 a single-file dump keeps one worker with up to 144 Rayon threads while larger
-dumps use the measured 32-worker topology.
+dumps use the 32-worker topology.
 
-Sometimes individual tokenization jobs fail this can be inspected from dumps remaining in the dumps folder and not having been moved to the completed-dumps folder. In this case one should rerun the script with the `--dont_recompute_dumps` flag
+Sometimes individual tokenization jobs fail this can be inspected from dumps remaining in the dumps folder and not having been moved to the completed-dumps folder. In this case one should rerun the script with the `--dont_compute_dumps` flag
 
 ```
 ./tokenize_script.sh configs_apertus_v2/fineopus-filtered-stage5.cfg --dont_compute_dumps
