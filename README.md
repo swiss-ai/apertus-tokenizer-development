@@ -108,12 +108,13 @@ Preliminary. All four folders prepend `<s>` and append `</s>` via their post-pro
 
 The production helpers live in `tokenization_scripts/`. They need a
 `data-pipeline-pretrain` checkout at `$HOME/data-pipeline-pretrain` on Clariden, which
-`tokenization_scripts/env.toml` mounts into the container. The provenance readers come
-from data-pipeline-pretrain PR #37, so check out its branch `token-source-maps` until it
-merges:
+`tokenization_scripts/env.toml` mounts into the container. The provenance readers and the
+tokenizer's sequence-length guard come from data-pipeline-pretrain PRs #37 and #38, so
+check out #38's branch `stackv31-language-tokenization`, which contains #37, until they
+merge:
 
 ```bash
-git clone -b token-source-maps git@github.com:swiss-ai/data-pipeline-pretrain.git "$HOME/data-pipeline-pretrain"
+git clone -b stackv31-language-tokenization git@github.com:swiss-ai/data-pipeline-pretrain.git "$HOME/data-pipeline-pretrain"
 ```
 
 On Clariden, run the Slurm orchestrator from the repository root with a config under
