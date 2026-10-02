@@ -19,7 +19,6 @@ from pathlib import Path
 import pyarrow.parquet as pq
 from data_pipeline_pretrain.pipeline.tokens import read_token_map
 from tokenizers import Tokenizer
-
 from validate_megatron import (
     COMMIT_RE,
     STRICT_VALIDATION,
@@ -64,7 +63,9 @@ def _completed_dumps(metadata_root: Path, expected_dumps: int) -> dict[int, list
     if pending:
         raise ValueError(f"unfinished dump manifest remains: {pending[0]}")
     completed = metadata_root / "completed-dumps"
-    paths = sorted(completed.glob("paths_file_*.txt"), key=lambda p: _dump_number(p.name))
+    paths = sorted(
+        completed.glob("paths_file_*.txt"), key=lambda p: _dump_number(p.name)
+    )
     numbers = [_dump_number(path.name) for path in paths]
     if numbers != list(range(expected_dumps)):
         raise ValueError(f"completed dump numbers differ: {numbers}")
@@ -73,7 +74,9 @@ def _completed_dumps(metadata_root: Path, expected_dumps: int) -> dict[int, list
         names = path.read_text(encoding="utf-8").splitlines()
         if not names or len(names) != len(set(names)):
             raise ValueError(f"empty or duplicate paths in {path}")
-        if any(Path(name).name != name or not name.endswith(".parquet") for name in names):
+        if any(
+            Path(name).name != name or not name.endswith(".parquet") for name in names
+        ):
             raise ValueError(f"non-flat source path in {path}")
         result[number] = names
     return result
@@ -103,7 +106,9 @@ def _validate_dump(
     if observed != PAIR_NAMES or any(path.is_symlink() for path in directory.iterdir()):
         raise ValueError(f"token dump files differ: {directory}: {sorted(observed)}")
     base = directory / "00000_tokens"
-    bin_path, idx_path, map_path = (base.with_suffix(f".{suffix}") for suffix in ("bin", "idx", "map"))
+    bin_path, idx_path, map_path = (
+        base.with_suffix(f".{suffix}") for suffix in ("bin", "idx", "map")
+    )
     index = validate_index(idx_path, MAX_INDEX_SEQUENCE_TOKENS, STRICT_VALIDATION)
     if bin_path.stat().st_size != index["token_count"] * index["token_bytes"]:
         raise ValueError(f"token binary/index size mismatch: {bin_path}")
@@ -196,7 +201,14 @@ def validate(args: argparse.Namespace) -> dict:
     processing_report = Path(args.processing_report).resolve()
     tokenizer_path = Path(args.tokenizer).resolve()
     config_path = Path(args.config).resolve()
-    for path in (dataset_root, metadata_root, output_root, processing_report, tokenizer_path, config_path):
+    for path in (
+        dataset_root,
+        metadata_root,
+        output_root,
+        processing_report,
+        tokenizer_path,
+        config_path,
+    ):
         if not path.exists():
             raise FileNotFoundError(path)
     if (output_root / "_SUCCESS.json").exists():
@@ -213,7 +225,10 @@ def validate(args: argparse.Namespace) -> dict:
     with ProcessPoolExecutor(max_workers=args.workers) as executor:
         source_pairs = list(executor.map(_source_info, source_paths))
     sources = dict(source_pairs)
-    if len(sources) != len(source_pairs) or sum(item["rows"] for item in sources.values()) != processed_rows:
+    if (
+        len(sources) != len(source_pairs)
+        or sum(item["rows"] for item in sources.values()) != processed_rows
+    ):
         raise ValueError("source inventory and processing row count differ")
     dumps = _completed_dumps(metadata_root, args.expected_dumps)
     all_names = [name for names in dumps.values() for name in names]

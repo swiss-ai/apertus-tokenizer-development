@@ -4,7 +4,6 @@ import unittest
 from array import array
 from pathlib import Path
 
-
 SCRIPT = Path(__file__).parents[1] / "tokenization_scripts/validate_stem_direct.py"
 
 
