@@ -115,6 +115,76 @@ success the script writes `TOKENIZATION_MANIFEST.jsonl`, `CATEGORY_COUNTS.json`,
 `TOKENIZATION_RUN.json` and, last, a byte-identical `_SUCCESS.json` under
 `DATASET_OUTPUT_FOLDER_NAME`. It refuses to run if `_SUCCESS.json` already exists.
 
+### `validate_stem_direct.py`
+
+Validates and seals the flat STEM outputs below. Their processed trees have no examples
+manifest, so run this instead of `validate_tokenization.sh` once every dump worker has
+finished. On Clariden, from the repository root:
+
+```bash
+release=biocorpus-upstream-text-v1
+commit=$(git rev-parse HEAD)
+srun -A <account> --cpus-per-task=<cpus> --environment=tokenization_scripts/env.toml \
+  python3 tokenization_scripts/validate_stem_direct.py \
+    --dataset /capstor/store/cscs/swissai/infra01/datasets/$release \
+    --dataset-name $release \
+    --metadata-root /capstor/store/cscs/swissai/infra01/datasets_tokenized/${release}_apertus_v2 \
+    --output-folder /capstor/store/cscs/swissai/infra01/datasets_tokenized/${release}_apertus_v2/preliminary_mul_200k/$release \
+    --processing-report <processing-report.json> \
+    --tokenizer preliminary_mul_200k/tokenizer.json \
+    --config tokenization_scripts/configs_apertus_v2/$release.cfg \
+    --durable-source-root /capstor/store/cscs/swissai/infra01/datasets/$release \
+    --implementation-commit "$commit" \
+    --validator-commit "$commit" \
+    --expected-dumps 16 \
+    --workers 16
+```
+
+| argument | default | config key | meaning |
+|---|---|---|---|
+| `--dataset` | required | `PATH_TO_RAW_DATASET` | Flat processed Parquet root that was tokenized. |
+| `--dataset-name` | required | `DATASET_NAME` | Must equal the `identity` (or `dataset`) field of the processing report. |
+| `--metadata-root` | required | `PATH_TO_PREPROCESSING_METADATA` | Holds `dumps/`, which must be empty of path manifests, and `completed-dumps/`. |
+| `--output-folder` | required | `DATASET_OUTPUT_FOLDER_NAME` (default `PATH_TO_OUTPUT_FOLDER/TOKENIZER_NAME/DATASET_NAME`) | Token output root; must contain only `dump-<n>` directories. |
+| `--processing-report` | required | | JSON report written with `--report-output` by the producing pipeline's validate step in data-pipeline-pretrain (see the table below). Its `counts.processed_rows` must equal the Parquet rows and the tokenized sequences. |
+| `--tokenizer` | required | `TOKENIZER` | `tokenizer.json` used for tokenization. |
+| `--config` | required | the config file | Config whose SHA-256 is recorded in the seal. |
+| `--durable-source-root` | required | `TOKEN_MAP_SOURCE_ROOT` | Root that every map must record, compared as an exact string. |
+| `--implementation-commit` | required | | Full 40-character commit of the tokenizer code that produced the output. |
+| `--validator-commit` | required | | Full 40-character commit of this validator. |
+| `--expected-dumps` | required | `DUMPS_NUMBER` | Completed dumps must be numbered exactly `0` to N-1. |
+| `--workers` | `8` | | Parallel validation processes. |
+
+The validator always hashes the source, `.bin` and `.idx` files. It expects one
+`00000_tokens.{bin,idx,map}` triple per dump (`NUMBER_OF_DATATROVE_TASKS=1`), text
+column `text` and identifier column `source_key`. On success it writes
+`TOKENIZATION_MANIFEST.jsonl`, `TOKENIZATION_RUN.json` and, last, a byte-identical
+`_SUCCESS.json`.
+
+Each STEM dataset has a config named `<DATASET_NAME>.cfg` in `configs_apertus_v2/`
+and, except the two SYNTHETIC-1 identities, in `configs_apertus_v2_rcp/`. A pair differs
+only in `PATH_TO_RAW_DATASET` and `PATH_TO_OUTPUT_FOLDER`. `TOKEN_MAP_SOURCE_ROOT` is the
+Clariden processed root in both, so pass that root as `--durable-source-root` on RCP
+too.
+
+| `DATASET_NAME` | processing report from |
+|---|---|
+| `biocorpus-upstream-text-v1` | `pipelines/biocollection/main_2_validate.py` |
+| `thebiocollection-free-text-upstream-text-v1` | `pipelines/biocollection/main_2_validate.py` |
+| `thebiocollection-instruction-upstream-text-v1` | `pipelines/biocollection/main_2_validate.py` |
+| `superior-reasoning-apertus-inner-v1` | `pipelines/stem-reasoning-traces/main_4_validate.py` |
+| `synthetic-1-verified-apertus-inner-v2` | none yet, see below |
+| `synthetic-1-unverified-apertus-inner-v2` | none yet, see below |
+
+The SYNTHETIC-1 v2 trees on Clariden exclude the collections the licence review
+rejected. They were derived from the v1 run output by dropping those rows, and each
+tree records how in `DERIVATION.json` and `derivation/`: the filter, the licence
+policy (identical to the one in `pipelines/stem-reasoning-traces`), the source lookup
+and the kept and dropped row counts. They have no processing report, so this
+validator cannot seal their tokenization. A `pipelines/stem-reasoning-traces` run, which
+applies the same licence filter, produces them with one. There is no config for the
+unfiltered v1 trees.
+
 ### `prepare_dumps.py`
 
 `tokenize_script.sh` calls it with these arguments.
