@@ -155,6 +155,7 @@ success the script writes `TOKENIZATION_MANIFEST.jsonl`, `CATEGORY_COUNTS.json`,
 | `--paths-file` | required | position 4 | One input path per line. |
 | `--column` | `text` | `COLUMN_KEY` | Text column. |
 | `--id-column` | `id` | `ID_COLUMN` | Document identifier column. |
+| `--token-map-source-root` | empty (the read root) | `TOKEN_MAP_SOURCE_ROOT` | Absolute dataset root recorded in the source maps. |
 | `--rehydrate` | `False` | `REHYDRATE_FLAG` | `true`, `1` or `yes` applies the rehydrater. |
 | `--extension` | `.parquet` | `EXTENSION` | Input extension. A value containing `jsonl` uses the JSONL reader and writes no source maps. |
 | `--include-boolean-column` | empty | `INCLUDE_BOOLEAN_COLUMN` | Boolean column that selects rows. Parquet only, and requires `--include-reason-column`. |
@@ -235,6 +236,12 @@ The config is sourced as shell, so do not put untrusted content in it.
 - `DATASET_NAME`: dataset name used in output paths, job names and metadata.
 - `COLUMN_KEY`: source text column.
 - `ID_COLUMN`: source identifier column; defaults to `id`.
+- `TOKEN_MAP_SOURCE_ROOT`: optional absolute dataset root recorded in the source maps
+  instead of the physical read root. It needs a data-pipeline-pretrain checkout whose
+  `ProvenanceParquetReader` accepts `provenance_dataset_root` (PR #37).
+  `validate_megatron.py` requires every recorded root to resolve to the same path as
+  `PATH_TO_RAW_DATASET`, so if this key resolves to a different path, validation
+  rejects the maps with "token map has the wrong prepared root".
 - `PATH_TO_RAW_DATASET`: input root.
 - `PATH_TO_OUTPUT_FOLDER`: output and log root.
 - `PATH_TO_PREPROCESSING_METADATA`: dump manifests, completion state and symlinks.

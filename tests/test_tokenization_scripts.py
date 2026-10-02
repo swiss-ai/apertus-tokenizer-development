@@ -10,6 +10,14 @@ TOKENIZATION_SCRIPTS = REPO_ROOT / "tokenization_scripts"
 
 
 class TokenizationScriptTest(unittest.TestCase):
+    def test_worker_reads_the_config_or_ninth_argument(self):
+        worker = (TOKENIZATION_SCRIPTS / "tokenize.sh").read_text(encoding="utf-8")
+        self.assertIn(
+            "TOKENIZER_THREADS=${9:-${TOKENIZER_THREADS:-}}",
+            worker,
+        )
+        self.assertIn("srun --ntasks=1", worker)
+
     def capture_sbatch_arguments(self, tasks, extra_config=()):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)

@@ -28,6 +28,7 @@ ID_COLUMN=${ID_COLUMN:-id}
 INCLUDE_BOOLEAN_COLUMN=${INCLUDE_BOOLEAN_COLUMN:-}
 INCLUDE_REASON_COLUMN=${INCLUDE_REASON_COLUMN:-}
 INCLUDED_REASON=${INCLUDED_REASON-included}
+TOKEN_MAP_SOURCE_ROOT=${TOKEN_MAP_SOURCE_ROOT:-}
 TOKENIZER_BATCH_SIZE=${6:-${TOKENIZER_BATCH_SIZE:-10000}}
 TOKENIZER_BATCH_BYTES=${7:-${TOKENIZER_BATCH_BYTES:-33554432}}
 TOKENIZER_WORKERS=${8:-${TOKENIZER_WORKERS:-$NUMBER_OF_DATATROVE_TASKS}}
@@ -76,6 +77,7 @@ preprocess_command=(
   --paths-file "$paths_file" \
   --column "$COLUMN_KEY" \
   --id-column "$ID_COLUMN" \
+  --token-map-source-root "$TOKEN_MAP_SOURCE_ROOT" \
   --extension "${EXTENSION:-.parquet}" \
   --rehydrate "$REHYDRATE_FLAG" \
   --include-boolean-column "$INCLUDE_BOOLEAN_COLUMN" \
@@ -86,7 +88,7 @@ preprocess_command=(
 if [ "$TOKENIZATION_LAUNCH_BACKEND" = rcp ]; then
   "${preprocess_command[@]}"
 elif [ "$TOKENIZATION_LAUNCH_BACKEND" = slurm ]; then
-  srun --environment="$ENV_FILE" numactl --membind=0-3 "${preprocess_command[@]}"
+  srun --ntasks=1 --environment="$ENV_FILE" numactl --membind=0-3 "${preprocess_command[@]}"
 else
   echo "Unsupported tokenization launch backend: $TOKENIZATION_LAUNCH_BACKEND" >&2
   exit 1
