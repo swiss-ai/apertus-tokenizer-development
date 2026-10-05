@@ -49,6 +49,21 @@ srun -A <account> --cpus-per-task=<cpus> --environment=tokenization_scripts/env.
 
 ## Entry points
 
+### Stack v3.1 repository context at 8k
+
+Use `configs_apertus_v2/stackv31-repo-context-8k-v1.cfg` on Clariden or its
+`configs_apertus_v2_rcp` counterpart on RCP. These configurations consume the
+sealed `stackv31-repo-context-8k-v1` prepared derivative and write to distinct
+8k output roots. They preserve the four category groups, enforce an 8192-token
+maximum including BOS/EOS, and bind source maps to the prepared release root.
+Strict validation hashes inputs and token triples and verifies map coverage.
+Prepare the new 8k text first; a new tokenization limit alone does not rebuild
+repository context from the old 4k examples.
+
+Use the normal preparation, worker and validation commands above with the 8k
+configuration. Retain the exact packing and tokenization producer commits,
+tokenizer digest, prepared `_SUCCESS`, manifests and validation receipts.
+
 ### `tokenize_script.sh`
 
 ```text
