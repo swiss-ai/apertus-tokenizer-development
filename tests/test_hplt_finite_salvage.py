@@ -223,6 +223,7 @@ def test_two_dump_steps_receive_disjoint_cpu_requests_and_both_are_waited(
         "CAPTURE": str(capture),
         "FAIL_ONE": "1" if fail_one else "0",
         "SLURM_CPUS_PER_TASK": "256",
+        "SLURM_MEM_PER_NODE": "524288",
     }
     script = ROOT / "tokenization_scripts/hplt_finite_score_dump_pair.sbatch"
     if spooled:
@@ -244,7 +245,10 @@ def test_two_dump_steps_receive_disjoint_cpu_requests_and_both_are_waited(
     calls = [json.loads(path.read_text()) for path in capture.glob("*.json")]
     assert len(calls) == 2
     assert all(
-        "--cpus-per-task=128" in call and "--exact" in call and "--exclusive" in call
+        "--cpus-per-task=128" in call
+        and "--exact" in call
+        and "--exclusive" in call
+        and "--mem=262144M" in call
         for call in calls
     )
     assert all(sum(path in call for path in paths) == 1 for call in calls)
