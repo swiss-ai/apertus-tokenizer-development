@@ -118,3 +118,58 @@ def test_worker_uses_absolute_paths_and_pinned_runtime(tmp_path):
     assert args[bash + 1] == str(ROOT / "tokenization_scripts/tokenize.sh")
     assert args[bash + 3] == row["DATASET_OUTPUT_FOLDER_NAME"] + "/jpn_Jpan/dump-7"
     assert args[bash + 5] == paths_file
+
+
+@pytest.mark.parametrize("stage", ["all", "prepare", "finalize"])
+def test_dataset_stage_reaches_allocated_container(tmp_path, stage):
+    fakebin = tmp_path / "bin"
+    fakebin.mkdir()
+    (fakebin / "srun").write_text(
+        "#!/usr/bin/env python3\nimport json,os,sys\n"
+        "open(os.environ['CAPTURE'],'w').write(json.dumps(sys.argv[1:]))\n"
+    )
+    (fakebin / "srun").chmod(0o755)
+    capture = tmp_path / "capture.json"
+    env = {
+        **os.environ,
+        "PATH": str(fakebin) + os.pathsep + os.environ["PATH"],
+        "CAPTURE": str(capture),
+    }
+    subprocess.run(
+        [
+            "bash",
+            str(ROOT / "tokenization_scripts/hplt_finite_score_dataset.sbatch"),
+            "config.cfg",
+            "runtime",
+            "edf.toml",
+            "control",
+            stage,
+        ],
+        env=env,
+        check=True,
+    )
+    assert json.loads(capture.read_text())[-5:] == [
+        "config.cfg",
+        "runtime",
+        "edf.toml",
+        "control",
+        stage,
+    ]
+
+
+def test_invalid_dataset_stage_fails_before_launch():
+    result = subprocess.run(
+        [
+            "bash",
+            str(ROOT / "tokenization_scripts/hplt_finite_score_dataset.sbatch"),
+            "config.cfg",
+            "runtime",
+            "edf.toml",
+            "control",
+            "unknown",
+        ],
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 2
+    assert "Stage must be" in result.stderr

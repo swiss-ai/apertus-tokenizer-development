@@ -5,11 +5,16 @@ config=$1
 runtime=$2
 edf=$3
 control=$4
+stage=${5:-all}
+case "$stage" in
+  all|prepare|finalize) ;;
+  *) echo "Stage must be all, prepare or finalize" >&2; exit 2 ;;
+esac
 script_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 if [ "${HPLT_INSIDE_EDF:-0}" != 1 ]; then
   srun --ntasks=1 --gpus=0 --gres=none --environment="$edf" \
     env HPLT_INSIDE_EDF=1 PYTHONPATH="$runtime/src" TOKENIZATION_LAUNCH_BACKEND=rcp \
-    bash "$script_dir/hplt_finite_score_dataset.sbatch" "$config" "$runtime" "$edf" "$control"
+    bash "$script_dir/hplt_finite_score_dataset.sbatch" "$config" "$runtime" "$edf" "$control" "$stage"
   exit
 fi
 source "$config"
@@ -29,6 +34,10 @@ if [ ! -f "$PATH_TO_PREPROCESSING_METADATA/HPLT_DUMPS.json" ]; then
   python "$script_dir/hplt_finite_score_resume.py" freeze "${resume_args[@]}"
 fi
 python "$script_dir/hplt_finite_score_resume.py" check "${resume_args[@]}"
+if [ "$stage" = prepare ]; then
+  exit
+fi
+if [ "$stage" = all ]; then
 while IFS= read -r paths_file; do
   relative=${paths_file#"$PATH_TO_PREPROCESSING_METADATA/dumps/"}
   group=$(dirname "$relative")
@@ -39,7 +48,12 @@ while IFS= read -r paths_file; do
     "$PATH_TO_OUTPUT_FOLDER/logs/$DATASET_NAME/$group/dump-$dump" \
     "$paths_file" "$PATH_TO_PREPROCESSING_METADATA/completed-dumps/$group"
 done < <(find "$PATH_TO_PREPROCESSING_METADATA/dumps" -type f -name 'paths_file_*.txt' -print | sort)
+fi
 python "$script_dir/hplt_finite_score_resume.py" check "${resume_args[@]}"
+if [ -n "$(find "$PATH_TO_PREPROCESSING_METADATA/dumps" -type f -name 'paths_file_*.txt' -print -quit)" ]; then
+  echo "Pending dump manifests prevent finalization" >&2
+  exit 1
+fi
 if [ ! -f "$DATASET_OUTPUT_FOLDER_NAME/_SUCCESS.json" ]; then
   bash "$script_dir/validate_tokenization.sh" "$config"
 fi
