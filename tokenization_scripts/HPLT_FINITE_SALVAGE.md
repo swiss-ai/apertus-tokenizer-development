@@ -56,6 +56,19 @@ finish, run the dataset launcher with fifth argument `finalize`; it refuses any
 pending dump before strict validation and LC reservation. The default `all` mode
 remains the sequential, resumable one-node workflow.
 
+Clariden's whole-node allocations can pack two independent dump workers without
+changing encoding. Submit `hplt_finite_score_dump_pair.sbatch CONFIG RUNTIME EDF
+PATHS_FILE [SECOND_PATHS_FILE]` with 256 CPU cores and 512 GiB per node. Each
+standard worker requests an exclusive, exact 128-core step; two 32-process ×
+four-thread workers fit within that budget. The wrapper rejects duplicate dumps
+and insufficient CPU allocations and waits for both workers, retaining a healthy
+worker's completion if its partner fails. Benchmark one representative pair
+before scaling. Use the actual frozen manifests and short measured wall times.
+Each worker checks its own frozen dump pins and completion state before invoking
+the standard worker's cleanup. A completed dump is preserved on pair requeue;
+missing, duplicate or changed ownership evidence fails. The whole-inventory
+reconciliation remains a finalization check after all workers have stopped.
+
 The launcher also applies the runtime's existing LC reserve workflow with fraction 0.10, seed
 20260907, and `long-context-length-buckets-v3`, then verify and finalize its fresh
 sibling `.lc-reserve-v4` root. Combine its kept pairs with the unchanged original

@@ -35,9 +35,33 @@ def check(root, pins):
     return old
 
 
+def dump_state(root, pins, relative):
+    """Check this worker's ownership while other dumps finish concurrently."""
+    old = json.loads((root / "HPLT_DUMPS.json").read_text())
+    if old["pins"] != pins:
+        raise ValueError("dump input/config/runtime pins changed")
+    if relative not in old["dumps"]:
+        raise ValueError("dump is not in the frozen inventory")
+    present = [
+        (state, root / state / relative)
+        for state in ("dumps", "completed-dumps")
+        if (root / state / relative).is_file()
+    ]
+    if len(present) != 1:
+        raise ValueError("dump pending/completed ownership is missing or duplicated")
+    state, path = present[0]
+    if sha(path) != old["dumps"][relative]:
+        raise ValueError("dump inventory changed")
+    return "pending" if state == "dumps" else "completed"
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("stage", choices=["freeze", "check"])
+    parser.add_argument("stage", choices=["freeze", "check", "dump"])
+    parser.add_argument(
+        "--dump-relative",
+        help="one frozen group/paths_file_N.txt for dump ownership check",
+    )
     parser.add_argument(
         "--metadata",
         required=True,
@@ -59,6 +83,8 @@ def main():
         "--implementation-commit", required=True, help="tokenizer producer Git commit"
     )
     args = parser.parse_args()
+    if args.stage == "dump" and not args.dump_relative:
+        parser.error("dump stage requires --dump-relative")
     marker = json.loads(args.marker.read_text())
     if marker.get("complete") is not True or marker["pins"][
         "examples_manifest_sha256"
@@ -73,6 +99,9 @@ def main():
         "implementation_commit": args.implementation_commit,
     }
     receipt = args.metadata / "HPLT_DUMPS.json"
+    if args.stage == "dump":
+        print(dump_state(args.metadata, pins, args.dump_relative))
+        return
     if args.stage == "freeze":
         if receipt.exists():
             raise ValueError("dump inventory is already frozen")
