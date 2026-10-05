@@ -122,6 +122,7 @@ def test_worker_uses_absolute_paths_and_pinned_runtime(tmp_path, spooled):
         check=True,
     )
     args = json.loads(capture.read_text())
+    assert "--nodes=1" in args
     assert "--gpus=0" in args and "--gres=none" in args
     assert "--cpus-per-task=128" in args
     assert "--exclusive" in args and "--exact" in args
