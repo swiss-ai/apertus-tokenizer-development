@@ -10,6 +10,10 @@ if [ "$#" -lt 1 ] || [ "$#" -gt 2 ] || { [ "$#" -eq 2 ] && [ "$1" = "$2" ]; }; t
   exit 2
 fi
 script_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+# Slurm executes a spool copy; the config remains in the repository.
+if [ ! -f "$script_dir/hplt_finite_score_worker.sbatch" ]; then
+  script_dir=$(cd "$(dirname "$config")/.." && pwd)
+fi
 source "$config"
 if [ "${SLURM_CPUS_PER_TASK:-0}" -lt "$(( $# * CPUS_PER_TASK ))" ]; then
   echo "Allocation cannot hold the requested dump CPU steps" >&2

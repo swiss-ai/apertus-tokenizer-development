@@ -6,6 +6,10 @@ paths_file=$2
 runtime=$3
 edf=$4
 script_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+# Slurm executes a spool copy; the config remains in the repository.
+if [ ! -f "$script_dir/tokenize.sh" ]; then
+  script_dir=$(cd "$(dirname "$config")/.." && pwd)
+fi
 source "$config"
 if [ "$(git -C "$runtime" rev-parse HEAD)" != fc1e5a86526e38c5f31aa6a099473f5a95b511e7 ]; then
   echo "The pinned provenance/reserve runtime is required" >&2
