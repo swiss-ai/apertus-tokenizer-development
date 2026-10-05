@@ -108,7 +108,8 @@ optional:
 | `DATASET_MANIFEST` | Existing JSONL examples manifest. |
 | `REQUIRED_DATASET_MARKER` | Existing completion marker with `complete: true`, `smoke: false` and `pins.examples_manifest_sha256` equal to the manifest's SHA-256. |
 | `EXPECTED_GROUP_HEADS` | Non-empty comma-separated categories. |
-| `MAX_SEQUENCE_TOKENS` | Positive integer. |
+| `MAX_SEQUENCE_TOKENS` | Prepared-metadata guard; `0` disables it. |
+| `TOKENIZATION_VALIDATION_MAX_SEQUENCE_TOKENS` | Positive payload length bound; defaults to `MAX_SEQUENCE_TOKENS`. Set separately when the metadata guard is off. |
 
 The output must be grouped as `<category>/[...]/dump-<id>/<rank>_tokens.{bin,idx,map}`. On
 success the script writes `TOKENIZATION_MANIFEST.jsonl`, `CATEGORY_COUNTS.json`,
@@ -182,7 +183,7 @@ success the script writes `TOKENIZATION_MANIFEST.jsonl`, `CATEGORY_COUNTS.json`,
 | `--text-column` | `text` | `COLUMN_KEY` | Text column every map must record. |
 | `--id-column` | `id` | `ID_COLUMN` | Identifier column every map must record. |
 | `--expected-categories` | required | `EXPECTED_GROUP_HEADS` | Categories the manifest and the output's top level must equal. |
-| `--max-sequence-tokens` | required | `MAX_SEQUENCE_TOKENS` | Maximum tokens per sequence. |
+| `--max-sequence-tokens` | required | `TOKENIZATION_VALIDATION_MAX_SEQUENCE_TOKENS`, falling back to `MAX_SEQUENCE_TOKENS` | Positive maximum tokens per sequence in validation. |
 | `--workers` | `8` | `TOKENIZATION_VALIDATION_WORKERS` | Parallel validation processes. |
 | `--validation-mode` | `strict` | `TOKENIZATION_VALIDATION_MODE` | `strict` or `lightweight_infrastructure`, see below. |
 

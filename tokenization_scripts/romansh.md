@@ -52,8 +52,9 @@ There is one dump per configuration, with four file tasks/workers and four
 tokenizer threads per worker. Do not overlap workers on the same dump. Validation
 compares all expected Parquet row coordinates, token/index/map hashes, tokenizer
 identity and BOS/EOS, then publishes `_SUCCESS.json` last. The sequence metadata guard is disabled because preparation does not
-precompute `sequence_tokens`. Documents remain complete; reserve selection
-runs afterward. Use the existing LC reserve recipe separately before choosing
+precompute `sequence_tokens`. `TOKENIZATION_VALIDATION_MAX_SEQUENCE_TOKENS`
+separately sets the strict payload bound to the mmap int32 limit. Documents
+remain complete; reserve selection runs afterward. Use the existing LC reserve recipe separately before choosing
 the dense-mixture kept population; report source, reserved and kept tokens.
 
 Transfer the sealed prepared and token releases, reserve outputs and their
