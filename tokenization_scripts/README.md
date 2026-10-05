@@ -119,10 +119,12 @@ success the script writes `TOKENIZATION_MANIFEST.jsonl`, `CATEGORY_COUNTS.json`,
 
 Validates and seals the flat STEM outputs below. Their processed trees have no examples
 manifest, so run this instead of `validate_tokenization.sh` once every dump worker has
-finished. On Clariden, from the repository root:
+finished.
 
 Validation scans every token for vocabulary bounds and verifies exactly one BOS
 and EOS at each document's boundaries, rejecting literal boundary-token collisions.
+
+On Clariden, from the repository root:
 
 ```bash
 release=biocorpus-upstream-text-v1
