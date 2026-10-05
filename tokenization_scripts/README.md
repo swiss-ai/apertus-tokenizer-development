@@ -121,6 +121,9 @@ Validates and seals the flat STEM outputs below. Their processed trees have no e
 manifest, so run this instead of `validate_tokenization.sh` once every dump worker has
 finished. On Clariden, from the repository root:
 
+Validation scans every token for vocabulary bounds and verifies exactly one BOS
+and EOS at each document's boundaries, rejecting literal boundary-token collisions.
+
 ```bash
 release=biocorpus-upstream-text-v1
 commit=$(git rev-parse HEAD)

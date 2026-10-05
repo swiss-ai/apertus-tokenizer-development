@@ -16,6 +16,7 @@ from array import array
 from concurrent.futures import ProcessPoolExecutor
 from pathlib import Path
 
+import numpy as np
 import pyarrow.parquet as pq
 from data_pipeline_pretrain.pipeline.tokens import read_token_map
 from tokenizers import Tokenizer
@@ -90,6 +91,38 @@ def _check_records(records: array, first: int, rows: int, map_path: Path) -> Non
             raise ValueError(f"TOKMAP source row coordinates differ: {map_path}")
 
 
+def _validate_token_values(
+    bin_path: Path, idx_path: Path, index: dict, vocab_size: int
+) -> None:
+    """Check every token's vocabulary range and every document boundary."""
+    sequences = index["sequence_count"]
+    lengths = np.memmap(idx_path, mode="r", dtype="<i4", offset=34, shape=(sequences,))
+    pointers = np.memmap(
+        idx_path, mode="r", dtype="<i8", offset=34 + 4 * sequences, shape=(sequences,)
+    )
+    tokens = np.memmap(
+        bin_path, mode="r", dtype="<u4" if index["token_bytes"] == 4 else "<u2"
+    )
+    if int(lengths.min()) < 2:
+        raise ValueError(f"sequence lacks two boundary tokens: {bin_path}")
+    bos = eos = 0
+    for start in range(0, len(tokens), 1 << 20):
+        values = tokens[start : start + (1 << 20)]
+        if int(values.max()) >= vocab_size:
+            raise ValueError(f"token outside tokenizer vocabulary: {bin_path}")
+        bos += int(np.count_nonzero(values == 1))
+        eos += int(np.count_nonzero(values == 2))
+    for start in range(0, sequences, 1 << 16):
+        end = min(start + (1 << 16), sequences)
+        offsets = pointers[start:end] // index["token_bytes"]
+        if not np.all(tokens[offsets] == 1) or not np.all(
+            tokens[offsets + lengths[start:end] - 1] == 2
+        ):
+            raise ValueError(f"document BOS/EOS boundary differs: {bin_path}")
+    if bos != sequences or eos != sequences:
+        raise ValueError(f"BOS/EOS collision inside a document: {bin_path}")
+
+
 def _validate_dump(
     number: int,
     names: list[str],
@@ -112,6 +145,7 @@ def _validate_dump(
     index = validate_index(idx_path, MAX_INDEX_SEQUENCE_TOKENS, STRICT_VALIDATION)
     if bin_path.stat().st_size != index["token_count"] * index["token_bytes"]:
         raise ValueError(f"token binary/index size mismatch: {bin_path}")
+    _validate_token_values(bin_path, idx_path, index, vocab_size)
     idx_sha256 = sha256_file(idx_path)
     token_map = read_token_map(map_path.read_bytes())
     manifest, records = token_map["manifest"], token_map["records"]
