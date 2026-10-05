@@ -19,6 +19,8 @@ FIELDS = [
     "PATH_TO_RAW_DATASET",
     "TOKEN_MAP_SOURCE_ROOT",
     "DATASET_OUTPUT_FOLDER_NAME",
+    "PATH_TO_OUTPUT_FOLDER",
+    "PATH_TO_PREPROCESSING_METADATA",
     "DATASET_MANIFEST",
     "REQUIRED_DATASET_MARKER",
     "DUMP_GROUP_FIELDS",
@@ -47,6 +49,16 @@ def test_configs_preserve_group_identity_and_canonical_map_root(name, category):
     rcp = load_config("configs_apertus_v2_rcp", name)
     assert rcp.pop("TOKENIZATION_LAUNCH_BACKEND") == "rcp"
     assert clariden.pop("TOKENIZATION_LAUNCH_BACKEND") == ""
+    # Future reruns must not write into the accepted production token tree.
+    production = "apertus-pretrain-romansh-v1_apertus_v2"
+    future = production + "-clariden-rerun-v1"
+    for field in (
+        "PATH_TO_OUTPUT_FOLDER",
+        "PATH_TO_PREPROCESSING_METADATA",
+        "DATASET_OUTPUT_FOLDER_NAME",
+    ):
+        assert clariden[field] == rcp[field].replace(production, future)
+        rcp[field] = clariden[field]
     assert rcp == clariden
     assert clariden["PATH_TO_RAW_DATASET"].endswith(
         f"apertus-pretrain-romansh-v1/{category}"

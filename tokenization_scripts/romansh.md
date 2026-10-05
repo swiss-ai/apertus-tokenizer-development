@@ -67,7 +67,8 @@ reserve completion, sampler acceptance and trainer consumption are separate.
 
 The paired files under `configs_apertus_v2/` use the same prepared population,
 tokenizer, ID column, manifests, groups and limits. They use the standard Slurm
-backend. From the repository root, run the normal workflow documented in
+backend and a distinct `apertus-pretrain-romansh-v1_apertus_v2-clariden-rerun-v1`
+output root for the first rerun. The prepared map source roots remain identical. From the repository root, run the normal workflow documented in
 [README.md](README.md), with
 `configs_apertus_v2/romansh-<configuration>.cfg`. A rerun must use a fresh output
 identity or verified task-scoped retry; never run the worker against an accepted
