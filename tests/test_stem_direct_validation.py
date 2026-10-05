@@ -4,6 +4,8 @@ import unittest
 from array import array
 from pathlib import Path
 
+import numpy as np
+
 SCRIPT = Path(__file__).parents[1] / "tokenization_scripts/validate_stem_direct.py"
 
 
@@ -42,6 +44,31 @@ class StemDirectValidationTests(unittest.TestCase):
         records[4] = 0
         with self.assertRaisesRegex(ValueError, "row coordinates differ"):
             self.module._check_records(records, 3, 2, Path("tokens.map"))
+
+    def test_full_binary_validation_rejects_range_boundary_and_literal_collisions(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            binary, index = root / "tokens.bin", root / "tokens.idx"
+            index.write_bytes(
+                b"\0" * 34
+                + np.array([3, 4], dtype="<i4").tobytes()
+                + np.array([0, 12], dtype="<i8").tobytes()
+            )
+            info = {"sequence_count": 2, "token_count": 7, "token_bytes": 4}
+            cases = [
+                ([1, 17, 2, 1, 9, 10, 2], None),
+                ([1, 17, 2, 1, 999, 10, 2], "outside tokenizer"),
+                ([1, 17, 2, 1, 9, 10, 3], "boundary differs"),
+                ([1, 17, 2, 1, 1, 10, 2], "collision inside"),
+            ]
+            for values, error in cases:
+                binary.write_bytes(np.array(values, dtype="<u4").tobytes())
+                with self.subTest(values=values):
+                    if error:
+                        with self.assertRaisesRegex(ValueError, error):
+                            self.module._validate_token_values(binary, index, info, 200)
+                    else:
+                        self.module._validate_token_values(binary, index, info, 200)
 
 
 if __name__ == "__main__":
