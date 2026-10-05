@@ -337,3 +337,11 @@ historical filename also covers flat code deliveries. Pass `--dataset`,
 `--implementation-commit`, `--validator-commit` and `--workers`. It requires exact
 source coverage, completed manifests, full payload hashes and original source row
 coordinates before sealing. Reserve and destination acceptance remain separate.
+
+Seven additional paired configs append `-boundary-safe-v1` to those corrected
+identities. They consume the complete `main_4_escape_boundaries.py` derivative,
+which escapes source spellings for the tokenizer's boundary IDs 1 and 2 without
+changing source keys or row order. Existing accepted repair roots stay immutable.
+The final derivative's report records both the IP-repair producer and the boundary
+escape producer, its parent seal and exact tokenizer. Tokenization must still pass
+the full binary BOS/EOS collision check; a completed job alone is insufficient.

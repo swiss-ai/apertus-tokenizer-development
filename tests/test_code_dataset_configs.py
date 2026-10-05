@@ -112,3 +112,33 @@ def test_corrected_code_releases_preserve_old_configs_and_durable_maps():
         assert rcp["TOKENIZATION_LAUNCH_BACKEND"] == "rcp"
         assert rcp["TOKENIZER_THREADS"] == "16"
         assert _assignments(CLARIDEN_CONFIGS / f"{old}.cfg")["DATASET_NAME"] == old
+
+
+def test_boundary_safe_derivatives_have_complete_paired_paths():
+    parents = (
+        "nemotron-terminal-corpus-marin-role-v2",
+        "swe-zero-12m-trajectories-marin-role-v2",
+        "davinci-dev-ctx-marin-markdown-v2",
+        "davinci-dev-env-marin-tool-v2",
+        "coderforge-preview-marin-tool-v2",
+        "swe-hero-openhands-marin-tool-v2",
+        "swe-rebench-openhands-marin-tool-v3",
+    )
+    for parent in parents:
+        release = parent + "-boundary-safe-v1"
+        clariden = _assignments(CLARIDEN_CONFIGS / f"{release}.cfg")
+        rcp = _assignments(RCP_CONFIGS / f"{release}.cfg")
+        durable = (
+            f"/capstor/store/cscs/swissai/infra01/datasets/swiss-ai/code/{release}"
+        )
+        assert clariden["DATASET_NAME"] == rcp["DATASET_NAME"] == release
+        assert clariden["PATH_TO_RAW_DATASET"] == durable
+        assert rcp["PATH_TO_RAW_DATASET"] == f"/mloscratch/{release}"
+        assert (
+            clariden["TOKEN_MAP_SOURCE_ROOT"] == rcp["TOKEN_MAP_SOURCE_ROOT"] == durable
+        )
+        assert rcp["PATH_TO_OUTPUT_FOLDER"] == f"/mloscratch/{release}_apertus_v2"
+        assert clariden["PATH_TO_OUTPUT_FOLDER"].endswith(f"/{release}_apertus_v2")
+        assert rcp["ID_COLUMN"] == "source_key"
+        assert rcp["TOKENIZER_THREADS"] == "16"
+        assert rcp["NUMBER_OF_DATATROVE_TASKS"] == "1"
