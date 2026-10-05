@@ -46,9 +46,37 @@ compatible environment. Strict validation checks all indexes/maps/source-row
 coverage, hashes payloads, and seals the variant. Missing or malformed output
 prevents release.
 
+For a deadline that needs more nodes, pass `prepare` as the dataset launcher's
+fifth argument. After it freezes the actual dump inventory, submit the standard
+`hplt_finite_score_worker.sbatch` once per remaining dump, using its exact config,
+dump output/log paths, paths-file and completed-manifest directory. Size the job
+count from those manifests and never assign a dump twice. Measure the first
+representative workers before choosing an array throttle. After all worker jobs
+finish, run the dataset launcher with fifth argument `finalize`; it refuses any
+pending dump before strict validation and LC reservation. The default `all` mode
+remains the sequential, resumable one-node workflow.
+
 The launcher also applies the runtime's existing LC reserve workflow with fraction 0.10, seed
 20260907, and `long-context-length-buckets-v3`, then verify and finalize its fresh
 sibling `.lc-reserve-v4` root. Combine its kept pairs with the unchanged original
 kept pairs under an explicitly inventoried new union identity. Record original,
 recovered, reserved and kept counts separately. Preserve source maps and original
 paths; final mixture supply comes from measured indexes, not an estimate.
+
+`hplt_finite_score_union.py original` qualifies the unchanged kept pairs ahead of
+recovery completion. It hashes their payloads, validates indexes and available
+maps, excludes `_reserved/*`, and recounts the reserve indexes against the
+accepted original ledger. `seal` additionally requires the new strict token and
+LC seals, recounts token conservation, and reencodes the first, last and longest
+sequence of every recovered kept pair from its mapped prepared source row.
+
+The thin `hplt_finite_score_union.sbatch` wrapper accepts the config, compatible
+runtime, EDF, control root, original kept split root, variant (`dclm-10`,
+`dclm-33`, `fwedu-10`, `fwedu-33`) and optional stage (`seal` by default).
+Use one worker allocation per variant, with 24 CPU processes and adequate I/O
+bandwidth. Persistent hash receipts make qualification resumable; changed
+parents or code fail. The new `kept-unions/<variant>` directories contain
+individual immutable-parent links under `original/` and `recovered/`, with a
+hashed `TOKEN_UNION_MANIFEST.jsonl` and final `_SUCCESS.json`. Accounting reports
+original, recovered and combined source/reserved/kept tokens separately. Available
+original maps are preserved; missing historical maps are not reconstructed.
