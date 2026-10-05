@@ -78,17 +78,13 @@ class GroupedDumpsTest(unittest.TestCase):
         calls = self.root / "sbatch.calls"
         srun = binary_dir / "srun"
         srun.write_text(
-            "#!/bin/bash\n"
-            "while [[ \"$1\" == --* ]]; do shift; done\n"
-            "exec \"$@\"\n",
+            '#!/bin/bash\nwhile [[ "$1" == --* ]]; do shift; done\nexec "$@"\n',
             encoding="utf-8",
         )
         srun.chmod(0o755)
         sbatch = binary_dir / "sbatch"
         sbatch.write_text(
-            "#!/bin/bash\n"
-            "printf '%s\\n' \"$*\" >>\"$SBATCH_CALLS\"\n"
-            "echo 101\n",
+            '#!/bin/bash\nprintf \'%s\\n\' "$*" >>"$SBATCH_CALLS"\necho 101\n',
             encoding="utf-8",
         )
         sbatch.chmod(0o755)
@@ -96,9 +92,7 @@ class GroupedDumpsTest(unittest.TestCase):
         environment["PATH"] = f"{binary_dir}:{environment['PATH']}"
         environment["SBATCH_CALLS"] = str(calls)
         script = (
-            Path(__file__).parents[1]
-            / "tokenization_scripts"
-            / "tokenize_script.sh"
+            Path(__file__).parents[1] / "tokenization_scripts" / "tokenize_script.sh"
         )
         subprocess.run(
             ["bash", str(script), str(config)],
@@ -143,6 +137,31 @@ class GroupedDumpsTest(unittest.TestCase):
                 "languages/python/0000.parquet",
                 "languages/python/0001.parquet",
             ],
+        )
+
+    def test_symlinked_dataset_root_keeps_source_paths_inside_the_dataset(self):
+        (self.source / "one.parquet").write_bytes(b"one")
+        nested = self.source / "nested/two.parquet"
+        nested.parent.mkdir()
+        nested.write_bytes(b"two")
+        alias = self.root / "alias"
+        alias.symlink_to(self.source, target_is_directory=True)
+        self.prepare(
+            dataset_folder=str(alias),
+            manifest=None,
+            group_fields="",
+            group_metadata="",
+            expected_groups=0,
+            expected_group_heads="",
+            n_dumps=1,
+        )
+        paths = (self.metadata / "dumps/paths_file_0.txt").read_text().splitlines()
+        self.assertEqual(set(paths), {"one.parquet", "nested/two.parquet"})
+        self.assertTrue(
+            all(
+                not Path(path).is_absolute() and ".." not in Path(path).parts
+                for path in paths
+            )
         )
 
     def test_standard_entrypoint_submits_every_group_through_tokenize_sh(self):
@@ -197,9 +216,7 @@ class GroupedDumpsTest(unittest.TestCase):
         self.assertEqual(len(submitted), 2)
         self.assertTrue(all("tokenize.sh" in call for call in submitted))
         self.assertTrue(all("stackv31_tokenize.sh" not in call for call in submitted))
-        self.assertTrue(
-            any("programming/python/dump-0" in call for call in submitted)
-        )
+        self.assertTrue(any("programming/python/dump-0" in call for call in submitted))
         self.assertTrue(any("data/json/dump-0" in call for call in submitted))
         self.assertTrue(any(f"{config} " in call for call in submitted))
 
