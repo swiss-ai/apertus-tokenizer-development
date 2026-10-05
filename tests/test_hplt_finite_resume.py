@@ -5,7 +5,7 @@ import json
 
 import pytest
 
-from tokenization_scripts.hplt_finite_score_resume import check
+from tokenization_scripts.hplt_finite_score_resume import check, dump_state
 
 
 def fixture(tmp_path):
@@ -54,3 +54,22 @@ def test_double_completion_fails(tmp_path):
     duplicate.write_bytes(path.read_bytes())
     with pytest.raises(ValueError, match="duplicate"):
         check(tmp_path, pins)
+
+
+def test_one_dump_retry_preserves_completed_state_and_checks_ownership(tmp_path):
+    path, pins = fixture(tmp_path)
+    relative = "jpn_Jpan/paths_file_0.txt"
+    assert dump_state(tmp_path, pins, relative) == "pending"
+    completed = tmp_path / "completed-dumps" / relative
+    completed.parent.mkdir(parents=True)
+    path.rename(completed)
+    assert dump_state(tmp_path, pins, relative) == "completed"
+    with pytest.raises(ValueError, match="frozen inventory"):
+        dump_state(tmp_path, pins, "another/paths_file_0.txt")
+    path.write_bytes(completed.read_bytes())
+    with pytest.raises(ValueError, match="duplicated"):
+        dump_state(tmp_path, pins, relative)
+    path.unlink()
+    completed.write_text("changed\n")
+    with pytest.raises(ValueError, match="inventory changed"):
+        dump_state(tmp_path, pins, relative)

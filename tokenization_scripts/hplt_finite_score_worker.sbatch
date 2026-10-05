@@ -15,12 +15,28 @@ relative=${paths_file#"$PATH_TO_PREPROCESSING_METADATA/dumps/"}
 group=$(dirname "$relative")
 dump=$(basename "$paths_file" .txt)
 dump=${dump#paths_file_}
+tokenizer=$(realpath "$script_dir/$TOKENIZER")
+state=$(python3 "$script_dir/hplt_finite_score_resume.py" dump \
+  --metadata "$PATH_TO_PREPROCESSING_METADATA" --config "$config" \
+  --marker "$REQUIRED_DATASET_MARKER" --manifest "$DATASET_MANIFEST" \
+  --tokenizer "$tokenizer" --runtime-commit "$(git -C "$runtime" rev-parse HEAD)" \
+  --implementation-commit "$(git -C "$script_dir/.." rev-parse HEAD)" \
+  --dump-relative "$relative")
+if [ "$state" = completed ]; then
+  if [ ! -d "$DATASET_OUTPUT_FOLDER_NAME/$group/dump-$dump" ]; then
+    echo "Completed dump output is missing; repair this unit before retrying" >&2
+    exit 1
+  fi
+  echo "Keeping already completed dump: $relative"
+  exit
+fi
 export PYTHONPATH="$runtime/src"
 # The direct-process backend runs inside this already allocated EDF container.
 export TOKENIZATION_LAUNCH_BACKEND=rcp
 export OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1
 cd "$script_dir/.."
-srun --ntasks=1 --gpus=0 --gres=none --environment="$edf" \
+srun --ntasks=1 --cpus-per-task="$CPUS_PER_TASK" --exclusive --exact \
+  --gpus=0 --gres=none --environment="$edf" \
   env PYTHONPATH="$runtime/src" TOKENIZATION_LAUNCH_BACKEND=rcp \
   bash "$script_dir/tokenize.sh" "$config" \
   "$DATASET_OUTPUT_FOLDER_NAME/$group/dump-$dump" \
