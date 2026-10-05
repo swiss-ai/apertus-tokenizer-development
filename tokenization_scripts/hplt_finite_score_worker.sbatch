@@ -41,11 +41,11 @@ export OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1
 cd "$script_dir/.."
 # Give each CPU step its proportional memory share; otherwise Slurm assigns
 # the entire allocation to the first step and serializes a paired launch.
-memory_args=()
+step_args=(--nodes=1 --ntasks=1 --cpus-per-task="$CPUS_PER_TASK" --exclusive --exact)
 if [ "${SLURM_MEM_PER_NODE:-0}" -gt 0 ]; then
-  memory_args=(--mem="$(( SLURM_MEM_PER_NODE * CPUS_PER_TASK / ${SLURM_CPUS_PER_TASK:-$CPUS_PER_TASK} ))M")
+  step_args+=(--mem="$(( SLURM_MEM_PER_NODE * CPUS_PER_TASK / ${SLURM_CPUS_PER_TASK:-$CPUS_PER_TASK} ))M")
 fi
-srun --ntasks=1 --cpus-per-task="$CPUS_PER_TASK" --exclusive --exact "${memory_args[@]}" \
+srun "${step_args[@]}" \
   --gpus=0 --gres=none --environment="$edf" \
   env PYTHONPATH="$runtime/src" TOKENIZATION_LAUNCH_BACKEND=rcp \
   bash "$script_dir/tokenize.sh" "$config" \
