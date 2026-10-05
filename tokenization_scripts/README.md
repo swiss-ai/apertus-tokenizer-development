@@ -333,3 +333,8 @@ To recover, resubmit with `--dont_compute_dumps`: only the path manifests still 
 `dumps/` are submitted. Do not regenerate dumps while workers from the previous
 inventory are running. Run validation only after every path manifest has moved to
 `completed-dumps/`.
+
+For Slurm launches, optional `MEMORY` is passed as `--mem`; omitting it preserves
+the partition default. The 8k Stack config requests 192 GiB for 64 CPU workers,
+so independent bounded dumps can share a Clariden node. Its 8 GB prepared-input
+dumps and requeueable jobs limit repeated work after preemption.
