@@ -205,3 +205,27 @@ def test_stem_dataset_configs_are_valid_shell():
                 check=False,
             )
             assert result.returncode == 0, result.stderr
+
+
+CORRECTED_SYNTHETIC1 = {
+    "synthetic-1-verified-apertus-inner-v3",
+    "synthetic-1-unverified-apertus-inner-v3",
+}
+
+
+def test_corrected_synthetic1_is_distinct_and_available_on_both_sites():
+    for release in CORRECTED_SYNTHETIC1:
+        for directory in (CLARIDEN_CONFIGS, RCP_CONFIGS):
+            path = directory / f"{release}.cfg"
+            config = _assignments(path)
+            assert config["DATASET_NAME"] == release
+            assert config["ID_COLUMN"] == "source_key"
+            assert config["TOKEN_MAP_SOURCE_ROOT"] == f"{CLARIDEN_PROCESSED_ROOT}/{release}"
+            assert release in config["PATH_TO_RAW_DATASET"]
+            assert release in config["PATH_TO_OUTPUT_FOLDER"]
+            assert "-v2" not in config["PATH_TO_RAW_DATASET"]
+            assert "-v2" not in config["PATH_TO_OUTPUT_FOLDER"]
+            assert subprocess.run(["bash", "-n", str(path)], capture_output=True).returncode == 0
+            if directory == RCP_CONFIGS:
+                assert config["PATH_TO_RAW_DATASET"] == f"/mloscratch/{release}"
+                assert config["TOKENIZATION_LAUNCH_BACKEND"] == "rcp"
