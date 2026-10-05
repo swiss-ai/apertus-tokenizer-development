@@ -73,7 +73,8 @@ def test_variants_have_disjoint_input_and_output_roots():
     assert len({r["DATASET_OUTPUT_FOLDER_NAME"] for r in rows}) == 4
 
 
-def test_worker_uses_absolute_paths_and_pinned_runtime(tmp_path):
+@pytest.mark.parametrize("spooled", [False, True])
+def test_worker_uses_absolute_paths_and_pinned_runtime(tmp_path, spooled):
     fakebin = tmp_path / "bin"
     fakebin.mkdir()
     (fakebin / "git").write_text(
@@ -103,10 +104,15 @@ def test_worker_uses_absolute_paths_and_pinned_runtime(tmp_path):
         "PATH": str(fakebin) + os.pathsep + os.environ["PATH"],
         "CAPTURE": str(capture),
     }
+    script = ROOT / "tokenization_scripts/hplt_finite_score_worker.sbatch"
+    if spooled:
+        copy = tmp_path / "slurm_script"
+        copy.write_text(script.read_text())
+        script = copy
     subprocess.run(
         [
             "bash",
-            str(ROOT / "tokenization_scripts/hplt_finite_score_worker.sbatch"),
+            str(script),
             str(config),
             paths_file,
             str(runtime),
@@ -185,8 +191,9 @@ def test_invalid_dataset_stage_fails_before_launch():
 
 
 @pytest.mark.parametrize("fail_one", [False, True])
+@pytest.mark.parametrize("spooled", [False, True])
 def test_two_dump_steps_receive_disjoint_cpu_requests_and_both_are_waited(
-    tmp_path, fail_one
+    tmp_path, fail_one, spooled
 ):
     fakebin = tmp_path / "bin"
     fakebin.mkdir()
@@ -217,9 +224,14 @@ def test_two_dump_steps_receive_disjoint_cpu_requests_and_both_are_waited(
         "FAIL_ONE": "1" if fail_one else "0",
         "SLURM_CPUS_PER_TASK": "256",
     }
+    script = ROOT / "tokenization_scripts/hplt_finite_score_dump_pair.sbatch"
+    if spooled:
+        copy = tmp_path / "slurm_script"
+        copy.write_text(script.read_text())
+        script = copy
     command = [
         "bash",
-        str(ROOT / "tokenization_scripts/hplt_finite_score_dump_pair.sbatch"),
+        str(script),
         str(config),
         "runtime",
         "edf",

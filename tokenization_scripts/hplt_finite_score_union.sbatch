@@ -9,6 +9,10 @@ original=$5
 variant=$6
 stage=${7:-seal}
 script_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+# Slurm executes a spool copy; the config remains in the repository.
+if [ ! -f "$script_dir/hplt_finite_score_union.py" ]; then
+  script_dir=$(cd "$(dirname "$config")/.." && pwd)
+fi
 source "$config"
 output="$PATH_TO_OUTPUT_FOLDER/kept-unions/$variant"
 tokenizer=$(realpath "$script_dir/$TOKENIZER")

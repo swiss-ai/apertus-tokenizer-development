@@ -11,6 +11,10 @@ case "$stage" in
   *) echo "Stage must be all, prepare or finalize" >&2; exit 2 ;;
 esac
 script_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+# Slurm executes a spool copy; the config remains in the repository.
+if [ ! -f "$script_dir/tokenize_script.sh" ]; then
+  script_dir=$(cd "$(dirname "$config")/.." && pwd)
+fi
 if [ "${HPLT_INSIDE_EDF:-0}" != 1 ]; then
   srun --ntasks=1 --gpus=0 --gres=none --environment="$edf" \
     env HPLT_INSIDE_EDF=1 PYTHONPATH="$runtime/src" TOKENIZATION_LAUNCH_BACKEND=rcp \
