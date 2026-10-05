@@ -81,3 +81,34 @@ def test_code_dataset_configs_do_not_encode_an_execution_site_flag():
             config = _assignments(directory / f"{release}.cfg")
             assert "EXECUTION_SITE" not in config
             assert "TOKENIZATION_LAUNCH_BACKEND" not in config
+
+
+def test_corrected_code_releases_preserve_old_configs_and_durable_maps():
+    affected = (
+        "nemotron-terminal-corpus-marin-role-v1",
+        "swe-zero-12m-trajectories-marin-role-v1",
+        "davinci-dev-ctx-marin-markdown-v1",
+        "davinci-dev-env-marin-tool-v1",
+        "coderforge-preview-marin-tool-v1",
+        "swe-hero-openhands-marin-tool-v1",
+        "swe-rebench-openhands-marin-tool-v2",
+    )
+    for old in affected:
+        release = old[:-1] + ("3" if old.endswith("v2") else "2")
+        clariden = _assignments(CLARIDEN_CONFIGS / f"{release}.cfg")
+        rcp = _assignments(RCP_CONFIGS / f"{release}.cfg")
+        durable = (
+            f"/capstor/store/cscs/swissai/infra01/datasets/swiss-ai/code/{release}"
+        )
+        assert clariden["DATASET_NAME"] == rcp["DATASET_NAME"] == release
+        assert clariden["PATH_TO_RAW_DATASET"] == durable
+        assert rcp["PATH_TO_RAW_DATASET"] == f"/mloscratch/{release}"
+        assert (
+            clariden["TOKEN_MAP_SOURCE_ROOT"] == rcp["TOKEN_MAP_SOURCE_ROOT"] == durable
+        )
+        assert rcp["PATH_TO_OUTPUT_FOLDER"] == f"/mloscratch/{release}_apertus_v2"
+        assert clariden["ID_COLUMN"] == rcp["ID_COLUMN"] == "source_key"
+        assert clariden["DUMPS_NUMBER"] == rcp["DUMPS_NUMBER"] == "256"
+        assert rcp["TOKENIZATION_LAUNCH_BACKEND"] == "rcp"
+        assert rcp["TOKENIZER_THREADS"] == "16"
+        assert _assignments(CLARIDEN_CONFIGS / f"{old}.cfg")["DATASET_NAME"] == old

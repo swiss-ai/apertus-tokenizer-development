@@ -318,3 +318,22 @@ To recover, resubmit with `--dont_compute_dumps`: only the path manifests still 
 `dumps/` are submitted. Do not regenerate dumps while workers from the previous
 inventory are running. Run validation only after every path manifest has moved to
 `completed-dumps/`.
+
+## Corrected code releases
+
+Paired configs retain the original releases and add six corrected v2 identities,
+plus OpenHands v3. RCP reads `/mloscratch/<release>` and writes
+`/mloscratch/<release>_apertus_v2`; both site configs record the durable Clariden
+`datasets/swiss-ai/code/<release>` path in token maps. These configs use 256 dumps
+(capped at source-file count), one task per dump and 16 tokenizer threads on RCP.
+
+The complete processed root must pass the `code-pii-repair` producer's validation
+before tokenization. Its `processing_report.json` records the exact inherited
+population, original row order, corrected spans and input/output hashes. Use the
+shared flat-delivery validator `validate_stem_direct.py` with that report; its
+historical filename also covers flat code deliveries. Pass `--dataset`,
+`--durable-source-root`, `--metadata-root`, `--output-folder`, `--processing-report`,
+`--tokenizer`, `--config`, `--dataset-name`, `--expected-dumps`,
+`--implementation-commit`, `--validator-commit` and `--workers`. It requires exact
+source coverage, completed manifests, full payload hashes and original source row
+coordinates before sealing. Reserve and destination acceptance remain separate.
