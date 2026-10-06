@@ -1,6 +1,7 @@
 """Keep old token bytes, replay new provenance, and reject incomplete unions."""
 
 from array import array
+from copy import deepcopy
 
 import numpy as np
 import pyarrow as pa
@@ -16,6 +17,35 @@ from tokenizers.models import WordLevel
 from tokenizers.pre_tokenizers import Whitespace
 
 from tokenization_scripts import hplt_finite_score_union as union
+
+
+def test_standard_strict_token_seal_and_invalid_parent_rejection():
+    source = {
+        "complete": True,
+        "constraints": {"validation_mode": "strict"},
+        "pins": {
+            "tokenizer_sha256": union.TOKENIZER_SHA256,
+            "prepared_marker_sha256": "1" * 64,
+            "prepared_examples_manifest_sha256": "2" * 64,
+            "implementation_commit": "3" * 40,
+            "validator_commit": "4" * 40,
+        },
+    }
+    split = {"policy": "long-context-reserve-v4"}
+    # This is the standard validator's shape: smoke belongs to the prepared seal.
+    union.validate_recovered_parents(source, split)
+    for corruption in ("smoke", "prepared_pin", "weak_validation", "commit"):
+        invalid = deepcopy(source)
+        if corruption == "smoke":
+            invalid["smoke"] = True
+        elif corruption == "prepared_pin":
+            invalid["pins"].pop("prepared_marker_sha256")
+        elif corruption == "weak_validation":
+            invalid["constraints"]["validation_mode"] = "lightweight_infrastructure"
+        else:
+            invalid["pins"]["validator_commit"] = "unqualified"
+        with pytest.raises(ValueError, match="not qualified"):
+            union.validate_recovered_parents(invalid, split)
 
 
 def pair(prefix, documents):

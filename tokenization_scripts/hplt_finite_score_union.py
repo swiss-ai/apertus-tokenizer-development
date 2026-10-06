@@ -7,6 +7,7 @@ import hashlib
 import json
 import multiprocessing as mp
 import os
+import re
 import subprocess
 from concurrent.futures import ProcessPoolExecutor
 from pathlib import Path
@@ -285,6 +286,30 @@ def seal_union(output, entries, accounting, pins, variant):
     return result
 
 
+def validate_recovered_parents(source, split):
+    pins = source.get("pins", {})
+    # Strict token validation requires a production prepared parent, but does
+    # not repeat its smoke flag in the token seal.
+    if (
+        source.get("complete") is not True
+        or source.get("smoke", False) is not False
+        or source.get("constraints", {}).get("validation_mode") != "strict"
+        or pins.get("tokenizer_sha256") != TOKENIZER_SHA256
+        or any(
+            not isinstance(pins.get(key), str)
+            or re.fullmatch(pattern, pins[key]) is None
+            for key, pattern in (
+                ("prepared_marker_sha256", r"[0-9a-f]{64}"),
+                ("prepared_examples_manifest_sha256", r"[0-9a-f]{64}"),
+                ("implementation_commit", r"[0-9a-f]{40}"),
+                ("validator_commit", r"[0-9a-f]{40}"),
+            )
+        )
+        or split.get("policy") != "long-context-reserve-v4"
+    ):
+        raise ValueError("recovered source/split is not qualified")
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("stage", choices=["original", "seal"])
@@ -351,14 +376,7 @@ def main():
         json.loads(source_marker.read_text()),
         json.loads(split_marker.read_text()),
     )
-    if (
-        source.get("complete") is not True
-        or source.get("smoke") is not False
-        or source.get("constraints", {}).get("validation_mode") != "strict"
-        or source["pins"]["tokenizer_sha256"] != TOKENIZER_SHA256
-        or split.get("policy") != "long-context-reserve-v4"
-    ):
-        raise ValueError("recovered source/split is not qualified")
+    validate_recovered_parents(source, split)
     new = qualify_root(
         args.recovered, "recovered", args.control, args.tokenizer, args.workers
     )
