@@ -319,29 +319,26 @@ To recover, resubmit with `--dont_compute_dumps`: only the path manifests still 
 inventory are running. Run validation only after every path manifest has moved to
 `completed-dumps/`.
 
-## Corrected code releases
+## Code source reruns
 
-Paired configs retain the original releases and add six corrected v2 identities,
-plus OpenHands v3. RCP reads `/mloscratch/<release>` and writes
-`/mloscratch/<release>_apertus_v2`; both site configs record the durable Clariden
-`datasets/swiss-ai/code/<release>` path in token maps. These configs use 256 dumps
-(capped at source-file count), one task per dump and 16 tokenizer threads on RCP.
+Paired configs add six v3 identities and OpenHands v4 for fresh processing of the
+pinned unredacted canonical sources through the standard code pipeline. RCP reads
+`/mloscratch/<release>` and writes `/mloscratch/<release>_apertus_v2`; both site
+configs record the durable Clariden `datasets/swiss-ai/code/<release>` path in
+source maps. They use 256 dumps, capped at the source-file count, one task per dump
+and 16 tokenizer threads on RCP.
 
-The complete processed root must pass the `code-pii-repair` producer's validation
-before tokenization. Its `processing_report.json` records the exact inherited
-population, original row order, corrected spans and input/output hashes. Use the
-shared flat-delivery validator `validate_stem_direct.py` with that report; its
-historical filename also covers flat code deliveries. Pass `--dataset`,
-`--durable-source-root`, `--metadata-root`, `--output-folder`, `--processing-report`,
-`--tokenizer`, `--config`, `--dataset-name`, `--expected-dumps`,
-`--implementation-commit`, `--validator-commit` and `--workers`. It requires exact
-source coverage, completed manifests, full payload hashes and original source row
-coordinates before sealing. Reserve and destination acceptance remain separate.
+First run the code producer's `main_3_validate.py` with `--dataset-name <release>`
+and save its processing report. Prepare and tokenize every output row using the
+ordinary entry points above. The shared flat-delivery validator
+`validate_stem_direct.py` accepts that report and checks complete source coverage,
+completed manifests, full payload hashes, source coordinates and BOS/EOS collisions
+before sealing. Pass `--dataset`, `--durable-source-root`, `--metadata-root`,
+`--output-folder`, `--processing-report`, `--tokenizer`, `--config`,
+`--dataset-name`, `--expected-dumps`, `--implementation-commit`,
+`--validator-commit` and `--workers`. Long-context reservation and destination
+acceptance follow separately.
 
-Seven additional paired configs append `-boundary-safe-v1` to those corrected
-identities. They consume the complete `main_4_escape_boundaries.py` derivative,
-which escapes source spellings for the tokenizer's boundary IDs 1 and 2 without
-changing source keys or row order. Existing accepted repair roots stay immutable.
-The final derivative's report records both the IP-repair producer and the boundary
-escape producer, its parent seal and exact tokenizer. Tokenization must still pass
-the full binary BOS/EOS collision check; a completed job alone is insufficient.
+Earlier configs, including the historical `-boundary-safe-v1` derivatives, remain
+for reproduction of immutable delivered roots. Their pinned producer commits own
+those historical recipes; new releases use the ordinary corrected source pipeline.
