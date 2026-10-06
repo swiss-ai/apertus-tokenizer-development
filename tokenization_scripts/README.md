@@ -23,6 +23,50 @@ explicit `runai submit` jobs.
   the tokenizer's SHA-256 with the digest in every source map, so validate with the same
   file that tokenized the data.
 
+## Complete FineTranslations token repair
+
+`repair_finetranslations_tokens.py` consumes the complete original unsplit token
+root and a sealed `finetranslations-source-pii-repair/v1` prepared derivative.
+It preserves every source coordinate and sequence ordinal. Changed prepared rows
+must exactly reencode their original token bytes before their corrected text is
+encoded; all inherited token bytes are compared before publication. Unchanged
+BIN/IDX files use immutable hardlinks. Maps are rebuilt with the corrected prepared
+root and its physical Parquet identities. The source roots are read-only.
+
+This requires `data-pipeline-pretrain`'s shared `MegatronSequenceEncoder`,
+`pair_splitter`, `megatron_index` and `token_map` APIs (compatible with commit
+`b3809beee4b2c915f00c7ed1a0dedde8187b5199`), Datatrove 0.6.0, Tokenizers 0.22.2,
+NumPy, PyArrow and pytest. Pin both Git revisions and the tokenizer bytes.
+
+```bash
+export PYTHONPATH=/pinned/data-pipeline-pretrain/src
+python -m tokenization_scripts.repair_finetranslations_tokens \
+  --source-root /original/complete/token-root \
+  --prepared-root /prepared/finetranslations-edu-span-bounded-ip-v1 \
+  --tokenizer /pinned/tokenizer.json --output-root /new/complete/token-root \
+  --dataset-id finetranslations-edu-span-bounded-ip-v1 \
+  --producer-commit <full-tokenizer-commit> --pipeline-commit <full-pipeline-commit> \
+  --workers 16
+```
+
+`--workers` means concurrent pair processes, from 1 to 64 (default 16), and also
+bounds full prepared-file hash checks. Run from this repository root. The explicit
+pipeline commit records the qualified dependency revision; the run also records
+the actual loaded component SHA-256 values. Require a fresh output root: existing
+or partial releases are never overwritten or resumed. Failures retain unsealed
+evidence. `TOKEN_REPAIR_MANIFEST.json` records all input/output triple hashes,
+population accounting, changed-row coverage and the prepared lineage. `_SUCCESS.json`
+is written last. A fresh reserve and independent source/byte acceptance are still
+required before mixture adoption.
+
+The thin native launcher takes eight positional arguments:
+`REPO PIPELINE TOKENIZER SOURCE PREPARED OUTPUT COMMIT PIPELINE_COMMIT`.
+`TOKEN_REPAIR_PYTHON` selects the installed interpreter (default `python`);
+`PYTHONPATH` may include an isolated dependency runtime. Supply account, partition
+and log path with `sbatch`, and allocate the documented 64 CPUs/256 GiB. It checks
+the clean tokenizer checkout, runs the real regression tests inside the allocation,
+then invokes the same module. Preparation and token repair have separate launchers.
+
 ## Clariden
 
 Run from the repository root:
