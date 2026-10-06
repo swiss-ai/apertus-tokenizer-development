@@ -393,3 +393,17 @@ To recover, resubmit with `--dont_compute_dumps`: only the path manifests still 
 `dumps/` are submitted. Do not regenerate dumps while workers from the previous
 inventory are running. Run validation only after every path manifest has moved to
 `completed-dumps/`.
+
+## SYNTHETIC-1 source reruns
+
+The paired `synthetic-1-{verified,unverified}-apertus-inner-v4` configs consume
+fresh complete output from the ordinary STEM producer in
+[data-pipeline-pretrain #56](https://github.com/swiss-ai/data-pipeline-pretrain/pull/56).
+They keep the pinned source admission and score split, use `source_key` IDs, and
+record the durable prepared root in maps. Earlier configs remain for reproduction.
+
+Use the standard preparation and per-dump tokenization entry points, followed by
+`validate_stem_direct.py` with the producer's complete processing report. The shared
+flat validator in [#11](https://github.com/swiss-ai/apertus-tokenizer-development/pull/11)
+checks source coverage, completed dumps, full hashes, map/index consistency and
+document boundaries. Long-context reservation and sampler adoption follow acceptance.
