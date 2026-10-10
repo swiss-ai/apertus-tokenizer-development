@@ -346,11 +346,10 @@ those historical recipes; new releases use the ordinary corrected source pipelin
 ## PII replacement inputs for tranche 01
 
 The seven code/agent v4 releases (OpenHands v5) and both SYNTHETIC-1 v5
-releases have paired configs ending in `-tranche01-eligible-v1`. These encode the
-DPP source-key eligibility projection, while the complete corrected prepared
-parents remain available. Use the projection's `population/report.json` for
-`validate_stem_direct.py --processing-report`; token maps bind the final eligible
-prepared root. Original and cancelled-attempt configs remain historical.
+releases have paired configs identifying the complete corrected prepared
+populations directly. Use the corresponding source-processing validator report
+for `validate_stem_direct.py --processing-report`; token maps bind the final
+corrected prepared root. Original and cancelled-attempt configs remain historical.
 
 The new configs use CPU tokenization (`GPUS=0`), one worker with 16 encoder
 threads and a 32 MiB input batch budget. Dump count/concurrency must be qualified
