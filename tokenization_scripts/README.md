@@ -342,3 +342,18 @@ acceptance follow separately.
 Earlier configs, including the historical `-boundary-safe-v1` derivatives, remain
 for reproduction of immutable delivered roots. Their pinned producer commits own
 those historical recipes; new releases use the ordinary corrected source pipeline.
+
+## PII replacement inputs for tranche 01
+
+The seven code/agent v4 releases (OpenHands v5) and both SYNTHETIC-1 v5
+releases have paired configs identifying the complete corrected prepared
+populations directly. Use the corresponding source-processing validator report
+for `validate_stem_direct.py --processing-report`; token maps bind the final
+corrected prepared root. Original and cancelled-attempt configs remain historical.
+
+The new configs use CPU tokenization (`GPUS=0`), one worker with 16 encoder
+threads and a 32 MiB input batch budget. Dump count/concurrency must be qualified
+against the accepted file inventory; pack CPU tasks on allocated nodes rather
+than allocating a GPU node to each small dump. The existing flat validator
+requires complete dump/source/sequence coverage and full token/map checks before
+sealing. These configuration files do not establish release acceptance.
