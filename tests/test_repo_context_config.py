@@ -70,12 +70,12 @@ def test_worker_and_validator_resolve_tokenizer_from_script_directory():
 
 def test_8k_configs_enforce_the_new_bound_and_provenance_root():
     configs = [
-        _assignments(ROOT / "tokenization_scripts" / directory / "stackv31-repo-context-8k-v1.cfg")
+        _assignments(ROOT / "tokenization_scripts" / directory / "stackv31-repo-context-8k-v2.cfg")
         for directory in ("configs_apertus_v2", "configs_apertus_v2_rcp")
     ]
     for config in configs:
         assert config["MAX_SEQUENCE_TOKENS"] == "8192"
-        assert config["DATASET_NAME"] == "stackv31-repo-context-8k-v1"
+        assert config["DATASET_NAME"] == "stackv31-repo-context-8k-v2"
         assert "8k" in config["PATH_TO_RAW_DATASET"]
         assert "8k" in config["PATH_TO_OUTPUT_FOLDER"]
         assert config["TOKEN_MAP_SOURCE_ROOT"] == "$PATH_TO_RAW_DATASET"
