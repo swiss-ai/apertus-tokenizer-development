@@ -178,6 +178,9 @@ while IFS= read -r paths_file; do
   if [ -n "$RES_OPT" ]; then
     submit_args+=("$RES_OPT")
   fi
+  if [ -n "${MEMORY:-}" ]; then
+    submit_args+=(--mem="$MEMORY")
+  fi
   if [ "${GPUS:-0}" -gt 0 ]; then
     submit_args+=(--gres="gpu:$GPUS")
   fi

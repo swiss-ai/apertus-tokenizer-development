@@ -49,6 +49,23 @@ srun -A <account> --cpus-per-task=<cpus> --environment=tokenization_scripts/env.
 
 ## Entry points
 
+### Stack v3.1 repository context at 8k
+
+Use `configs_apertus_v2/stackv31-repo-context-8k-v2.cfg` on Clariden or its
+`configs_apertus_v2_rcp` counterpart on RCP. These configurations consume the
+sealed `stackv31-repo-context-8k-v2` prepared release converted directly from
+raw `HuggingFaceCode/stack-v3-train@1f61b735bc0a5698345ce2196730f24bfa467f33` and write to distinct
+8k output roots. They preserve the four category groups, enforce an 8192-token
+maximum including BOS/EOS, and bind source maps to the prepared release root.
+Strict validation hashes inputs and token triples and verifies map coverage.
+Prepare and accept the new raw-source 8k text first. This revision has a different
+source snapshot from 4k; preserve its source manifest, population comparison and
+policy/holdout qualification receipts. The 4k artifact is not a content input.
+
+Use the normal preparation, worker and validation commands above with the 8k
+configuration. Retain the exact packing and tokenization producer commits,
+tokenizer digest, prepared `_SUCCESS`, manifests and validation receipts.
+
 ### `tokenize_script.sh`
 
 ```text
@@ -318,3 +335,8 @@ To recover, resubmit with `--dont_compute_dumps`: only the path manifests still 
 `dumps/` are submitted. Do not regenerate dumps while workers from the previous
 inventory are running. Run validation only after every path manifest has moved to
 `completed-dumps/`.
+
+For Slurm launches, optional `MEMORY` is passed as `--mem`; omitting it preserves
+the partition default. The 8k Stack config requests 192 GiB for 64 CPU workers,
+so independent bounded dumps can share a Clariden node. Its 8 GB prepared-input
+dumps and requeueable jobs limit repeated work after preemption.
