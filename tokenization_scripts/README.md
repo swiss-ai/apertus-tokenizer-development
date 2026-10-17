@@ -11,7 +11,8 @@ to the preparation producer; the sampler owns selection and its run maps.
 Use Python 3.10 or newer and a local DPP checkout at the exact commit in
 [`dpp-revision.txt`](dpp-revision.txt). DPP is private: access must be granted by its
 owner. Do not copy its source into this public repository or embed credentials.
-The paired commit is a local draft until it is published by the owner; neither
+The pinned commit is published in the coordinated
+[DPP draft](https://github.com/swiss-ai/data-pipeline-pretrain/pull/84). Neither
 repository's default branch is an implicit compatibility guarantee.
 
 ```sh
@@ -141,6 +142,5 @@ source approvals and exclusions, reconcile physical rehydration/filtering and so
 lineage, and choose a distinct output identity with the exact encoding recipe.
 Then record the reviewed command with that producer's adoption change. Keep actual
 frozen producing commits, payloads and maps; a later runtime merge cannot replace
-the identity that produced them. This paired draft remains open until compatible
-DPP publication/access, producer-specific adoption and the held lifecycle decisions
-are resolved.
+the identity that produced them. This paired draft remains open while private DPP integration
+access, producer-specific adoption and the held lifecycle decisions are unresolved.
