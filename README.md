@@ -108,7 +108,8 @@ Preliminary. All four folders prepend `<s>` and append `</s>` via their post-pro
 
 The supported tokenization job reads exact root-aligned Data and writes aligned
 BIN/IDX plus automatic token lengths. See the [runbook](tokenization_scripts/README.md)
-for pinned DPP setup, local assets, explicit boundaries, resources and validation.
+for pinned DPP setup, local assets, explicit boundaries, resources, validation
+and optional transparency tracking.
 The old dump/file-list launchers are retired. Existing `.cfg` recipes remain
 historical inputs awaiting producer-specific root migration; they are not runnable
 configs for the new job.

@@ -19,31 +19,29 @@ jobs:
       - run: python -m pip install ruff==0.17.1
       - run: ruff check tokenization_scripts/preprocess_megatron.py tests/test_tokenization_scripts.py
       - run: ruff format --check tokenization_scripts/preprocess_megatron.py tests/test_tokenization_scripts.py
+      - name: Check retained historical config facts
+        run: python -m unittest discover -s tests -p test_codealchemy_configs.py
 
   paired-source:
+    # Private source must never be exposed to untrusted fork proposal code.
+    if: ${{ vars.DPP_INTEGRATION_ENABLED == 'true' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) }}
     runs-on: ubuntu-latest
     strategy:
       matrix:
         python-version: ["3.10", "3.12"]
     steps:
       - uses: actions/checkout@v4
-      - name: Check private dependency access
-        id: access
+      - name: Require owner-provided read-only private DPP access
         env:
           DPP_READ_TOKEN: ${{ secrets.DPP_READ_TOKEN }}
-        run: |
-          if [ -n "$DPP_READ_TOKEN" ]; then
-            echo "available=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "available=false" >> "$GITHUB_OUTPUT"
-            echo "Paired integration skipped: an owner-provided DPP_READ_TOKEN with read access to private swiss-ai/data-pipeline-pretrain is required." >> "$GITHUB_STEP_SUMMARY"
-          fi
+        run: test -n "$DPP_READ_TOKEN"
       - name: Read exact paired revision
-        if: steps.access.outputs.available == 'true'
         id: pin
-        run: echo "revision=$(cat tokenization_scripts/dpp-revision.txt)" >> "$GITHUB_OUTPUT"
+        run: |
+          revision=$(cat tokenization_scripts/dpp-revision.txt)
+          [[ "$revision" =~ ^[0-9a-f]{40}$ ]]
+          printf 'revision=%s\n' "$revision" >> "$GITHUB_OUTPUT"
       - uses: actions/checkout@v4
-        if: steps.access.outputs.available == 'true'
         with:
           repository: swiss-ai/data-pipeline-pretrain
           ref: ${{ steps.pin.outputs.revision }}
@@ -51,14 +49,11 @@ jobs:
           path: dpp
           persist-credentials: false
       - uses: actions/setup-python@v5
-        if: steps.access.outputs.available == 'true'
         with:
           python-version: ${{ matrix.python-version }}
       - name: Install public source-test prerequisites
-        if: steps.access.outputs.available == 'true'
         run: python -m pip install -r tests/requirements/runtime.txt
       - name: Check typed producer interface and owning workflow
-        if: steps.access.outputs.available == 'true'
         env:
           PYTHONPATH: dpp/src
           MYPYPATH: dpp/src

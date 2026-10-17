@@ -41,8 +41,8 @@ URL. Supply the full commit containing those exact bytes. The job compares local
 bytes with that committed asset before output mutation, then workers load the
 verified bytes offline. A mutable directory label is insufficient. The recorded
 encoding context includes repository, commit and relative asset path, along with
-explicit disabled postprocessing/truncation/padding. No hashes or new manifest
-scheme are introduced.
+disabled special-token insertion, truncation and padding. Repository URLs use
+the configured origin without machine Git rewrites or embedded credentials.
 
 From this repository root, with shell variables set to your reviewed identities:
 
@@ -79,6 +79,40 @@ corruption before publishing both records. Token sequences correspond directly
 to root ordinals. No tokenizer `.map` is created or read; historical artifacts
 and maps remain with their original producer commits.
 
+## Connect a real run to transparency
+
+Tracking is optional. For a tracked run, use Python 3.11+ and the coordinated ADT
+SDK with authenticated access to your chosen catalogue. Follow DPP's
+`documentation/transparency.md` in the pinned checkout for installation, destination
+setup, producer capture and offline schema/semantic preview. Keep credentials out
+of the command and payload.
+
+Create one complete change-set JSON file from your reviewed declarations. It must
+declare the new aligned token Data and its automatic Annotation
+`annotation/<token-slug>-token-lengths@<token-revision>`, plus any related records.
+The token Data names the exact prepared text input; the Annotation describes the
+token Data. Use actual catalogue identities and the pushed reproducible producer
+commit. Preview this full payload before running; ADT's
+`json_dumps(payload, indent=2)` from `adt.lossless` preserves exact decimal values
+when writing JSON.
+
+Add these arguments to the job command above:
+
+```sh
+--proposal-file "$CHANGE_SET_JSON" --proposal-repo "$CATALOGUE_OWNER_REPO"
+```
+
+`CATALOGUE_OWNER_REPO` is an explicit GitHub `owner/repository`. Add
+`--proposal-issue N` to reuse an open issue with that exact whole record set;
+omitting it lets DPP discover an unambiguous match. The Python API accepts the
+same `rd.TrackedProposal` as `TokenizationJob(..., proposal=proposal)`.
+
+DPP checks accepted identities, proposal validity and pending reuse before
+mutating outputs. It submits the pending proposal before executing the native
+job, so a failed run may leave a pending issue. Omit both proposal arguments for
+offline operation: ADT is neither imported nor contacted. Catalogue acceptance,
+payload completion, eligibility and trainer consumption remain separate results.
+
 ## Retry and verify
 
 Nonempty outputs fail by default. Add `--resume` only when inputs, verified asset,
@@ -86,28 +120,10 @@ boundaries, partitioning, resources and native logs are compatible, and no reade
 or competing writers are active. Native completed tasks are reused; payloads are
 qualified again. The operator remains responsible for resume compatibility.
 The held completion/lifecycle policy gap remains open; this job adds no lifecycle
-policy and does not claim to seal releases. ADT is disabled and no declaration is
-published. Payload readiness is separate from eligibility and trainer consumption.
+policy and does not claim to seal releases. A tracked proposal does not close
+that gap or prove eligibility or trainer consumption.
 
-Run owning checks against the paired actual source interface:
-
-```sh
-export MYPYPATH="$DPP_CHECKOUT/src"
-python -m mypy --config-file pyproject.toml
-ruff check tokenization_scripts/preprocess_megatron.py tests/test_tokenization_scripts.py
-ruff format --check tokenization_scripts/preprocess_megatron.py tests/test_tokenization_scripts.py
-python -m pytest -q
-```
-
-The workflow tests construct a tiny local Git-pinned tokenizer/root, execute native
-workers fresh and resumed, verify exact sequences/lengths and uint16/int32 dtypes,
-assert no maps, and reject modified assets, missing roots, empty bodies and corrupt
-output. They download no model, submit no scheduler jobs and contact no ADT service.
-Hosted style checks use public prerequisites. Hosted paired integration is explicitly
-skipped unless an owner supplies the read-only `DPP_READ_TOKEN` secret; the default
-public repository token cannot read private DPP. A skipped job is not integration
-evidence, and local source checks do not establish hosted CI or production install
-success.
+For offline verification and contributor checks, see [development](DEVELOPMENT.md).
 
 ## Dataset adoption and historical recipes
 

@@ -1,19 +1,22 @@
 """Tokenize exact root-aligned Data with a pinned local tokenizer asset.
 
 Run with ``python -m tokenization_scripts.preprocess_megatron --help``.
-No model download, dataset preparation, selection or ADT publication occurs.
+No model download, dataset preparation or selection occurs. ADT tracking is opt-in.
 """
 
 from __future__ import annotations
 
 import argparse
+import json
 import os
 import re
 import subprocess
 from dataclasses import dataclass
+from decimal import Decimal
 from functools import cached_property
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlsplit, urlunsplit
 
 from data_pipeline_pretrain.pipeline import root_data as rd
 from datatrove.executor.local import LocalPipelineExecutor
@@ -47,6 +50,7 @@ class TokenizationJob:
     batch_bytes: int = 32 * 1024**2
     max_sequences_per_shard: int = 100000
     resume: bool = False
+    proposal: rd.TrackedProposal | None = None
 
     def __post_init__(self) -> None:
         for ref in (self.root_ref, self.input_ref, self.output_ref):
@@ -86,6 +90,25 @@ def _git(folder: Path, *arguments: str) -> bytes:
         ) from error
 
 
+def _repository_url(origin: str) -> str:
+    """Keep a fetchable source identity without URL credentials or Git rewrites."""
+    scp = re.fullmatch(r"[^@/]+@([^:/]+):(.+)", origin)
+    if scp:
+        origin = f"ssh://{scp[1]}/{scp[2]}"
+    parsed = urlsplit(origin)
+    if parsed.scheme not in ("https", "http", "ssh", "git") or not parsed.hostname:
+        raise ValueError(
+            "tokenizer origin must be a fetchable HTTPS or SSH repository URL"
+        )
+    host = parsed.netloc.rsplit("@", 1)[-1]
+    if parsed.hostname.lower() == "github.com":
+        path = parsed.path.rstrip("/")
+        if not path.endswith(".git"):
+            path += ".git"
+        return urlunsplit(("https", "github.com", path, "", ""))
+    return urlunsplit((parsed.scheme, host, parsed.path, "", ""))
+
+
 def load_asset(path: Path, revision: str) -> tuple[bytes, dict[str, Any]]:
     """Verify local asset bytes against an exact Git commit, without network I/O.
 
@@ -105,7 +128,10 @@ def load_asset(path: Path, revision: str) -> tuple[bytes, dict[str, Any]]:
         raise ValueError(
             "local tokenizer bytes differ from the configured Git revision"
         )
-    origin = _git(repository, "remote", "get-url", "origin").decode().strip()
+    # get-url expands machine insteadOf rewrites, which may contain credentials.
+    origin = _repository_url(
+        _git(repository, "config", "--get", "remote.origin.url").decode().strip()
+    )
     return pinned, {"repository": origin, "commit": revision, "path": relative}
 
 
@@ -139,7 +165,9 @@ def run_job(
     """Guard both outputs, run native tasks, qualify sequences and publish lengths.
 
     Raises on input/encoding/alignment/corruption errors; no row is filtered or
-    rehydrated. ADT is disabled. Resume only permits mutation and reuses native
+    rehydrated. ADT is loaded/contacted only for an explicit ``job.proposal``.
+    Tracked mode checks the whole proposal before production and requires the
+    coordinated ADT SDK on Python 3.11+. Resume permits mutation and reuses native
     completion records: it does not prove compatible inputs/config/logs or solve
     the separately held completion/lifecycle policy.
     """
@@ -201,7 +229,7 @@ def run_job(
         ],
         produce,
         resume=job.resume,
-        proposal=None,
+        proposal=job.proposal,
     )
 
 
@@ -315,9 +343,39 @@ def get_args(argv: list[str] | None = None) -> TokenizationJob:
         action="store_true",
         help="permit existing output mutation and reuse compatible native tasks (default: fail on nonempty output)",
     )
+    parser.add_argument(
+        "--proposal-file",
+        type=Path,
+        help="complete ADT change-set JSON, declaring token Data and automatic lengths; omitted disables tracking",
+    )
+    parser.add_argument(
+        "--proposal-repo",
+        help="explicit GitHub owner/repository for tracked submission; requires --proposal-file and ADT SDK (Python 3.11+)",
+    )
+    parser.add_argument(
+        "--proposal-issue",
+        type=positive_int,
+        help="open issue number to reuse for the exact whole record set; default discovers an unambiguous match",
+    )
     try:
-        return TokenizationJob(**vars(parser.parse_args(argv)))
-    except ValueError as error:
+        values = vars(parser.parse_args(argv))
+        file = values.pop("proposal_file")
+        repo = values.pop("proposal_repo")
+        issue = values.pop("proposal_issue")
+        if bool(file) != bool(repo) or (issue is not None and file is None):
+            raise ValueError(
+                "--proposal-file and --proposal-repo are required together; --proposal-issue requires both"
+            )
+        if file is not None:
+            # Preserve decimal values for ADT's lossless metadata contract.
+            payload = json.loads(file.read_text(encoding="utf-8"), parse_float=Decimal)
+            if not isinstance(payload, dict):
+                raise ValueError("proposal JSON must be a complete change-set object")
+            values["proposal"] = rd.TrackedProposal(
+                payload=payload, repo=repo, issue=issue
+            )
+        return TokenizationJob(**values)
+    except (OSError, ValueError) as error:
         parser.error(str(error))
 
 
@@ -326,6 +384,11 @@ def main(argv: list[str] | None = None) -> None:
     job = get_args(argv)
     try:
         tokens, _ = run_job(job)
+    except ImportError as error:
+        raise SystemExit(
+            "tokenization dependency unavailable; tracked runs require Python 3.11+ "
+            "and the coordinated ADT SDK (see the runbook)"
+        ) from error
     except (OSError, ValueError) as error:
         raise SystemExit(f"tokenization failed: {error}") from error
     print(
