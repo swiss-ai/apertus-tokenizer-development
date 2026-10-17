@@ -2,40 +2,38 @@
 
 `preprocess_megatron.py` is the supported job. It reads completed exact DPP root
 and primary-text Data, preserves every row in root order, and writes new aligned
-token Data plus its automatic Int64 `stored_tokens` Annotation. It neither selects
-nor rehydrates rows. Dataset preparation and physical population changes belong
-to the preparation producer; the sampler owns selection and its run maps.
+token Data plus its automatic Int64 `stored_tokens` Annotation. Dataset preparation
+and physical population changes belong to the preparation producer; the sampler
+owns selection and its run maps.
 
 ## Set up compatible code
 
 Use Python 3.10 or newer and a local DPP checkout at the exact commit in
 [`dpp-revision.txt`](dpp-revision.txt). DPP is private: access must be granted by its
-owner. Do not copy its source into this public repository or embed credentials.
-The pinned commit is published in the coordinated
-[DPP draft](https://github.com/swiss-ai/data-pipeline-pretrain/pull/84). Neither
-repository's default branch is an implicit compatibility guarantee.
+owner. Keep private source and credentials outside this public repository.
+Use this pin for the paired reader/writer interface.
 
 ```sh
 python -m venv .venv
 . .venv/bin/activate
 python -m pip install -r tests/requirements/runtime.txt
-# DPP_CHECKOUT is your separately authorized local DPP source checkout.
+# Set DPP_CHECKOUT to your local DPP source checkout.
 git -C "$DPP_CHECKOUT" checkout "$(cat tokenization_scripts/dpp-revision.txt)"
 export PYTHONPATH="$DPP_CHECKOUT/src${PYTHONPATH:+:$PYTHONPATH}"
 python -m tokenization_scripts.preprocess_megatron --help
 ```
 
-These public prerequisites support source tests and this local job; they do not
-claim a production DPP installation profile. Use the producer's supported runtime
-for deployment. Run one coordinator inside an allocated machine; scheduler
-submission remains the owning environment's responsibility.
+These prerequisites run the job and source checks from paired local checkouts.
+Use the producer's supported runtime for deployment. Run one coordinator inside
+an allocated machine; scheduler submission remains the owning environment's
+responsibility.
 
 ## Run a job
 
 The input must already have complete root-aligned metadata and payloads beneath
-one physical `data_root`. Use the exact approved root, text and new token Data
-references from that producer's port. Do not turn old `.cfg` names or dump paths
-into invented declaration references.
+one physical `data_root`. Use the exact root and primary-text Data references
+identifying the completed producer outputs. Choose a distinct output token Data
+reference with its own revision. The command takes explicit CLI arguments.
 
 The tokenizer JSON must be a local tracked file in a Git checkout with an origin
 URL. Supply the full commit containing those exact bytes. The job compares local
@@ -63,7 +61,7 @@ The body uses `add_special_tokens=False`. DPP inserts configured boundaries once
 The primary text field comes from the input Data's `primary_content` semantics;
 user IDs are unnecessary for root alignment. Empty text, empty encoded bodies,
 wrong output refs, missing input, cardinality/alignment problems and invalid IDs
-fail, without dropping a row or hiding errors behind boundary tokens.
+fail the job.
 
 `--tasks` counts deterministic native partitions; `--workers` counts concurrent
 processes, and `--threads` sets each process's Rayon pool. Defaults are one each.
@@ -76,11 +74,10 @@ nonnegative int32/code4. Output sharding may differ from input Parquet sharding.
 `run_producer` guards token Data and automatic lengths. Each native task writes
 BIN/IDX and lengths, including explicit empty pairs for idle tasks. Finalization
 checks native completion, exact pair coverage, token IDs/boundaries, lengths and
-corruption before publishing both records. Token sequences correspond directly
-to root ordinals. No tokenizer `.map` is created or read; historical artifacts
-and maps remain with their original producer commits.
+corruption before marking both collections complete. Each sequence ordinal
+identifies the corresponding root row in the text, metadata and Annotations.
 
-## Connect a real run to transparency
+## Track a run in transparency
 
 Tracking is optional. For a tracked run, use Python 3.11+ and the coordinated ADT
 SDK with authenticated access to your chosen catalogue. Follow DPP's
@@ -111,8 +108,8 @@ same `rd.TrackedProposal` as `TokenizationJob(..., proposal=proposal)`.
 DPP checks accepted identities, proposal validity and pending reuse before
 mutating outputs. It submits the pending proposal before executing the native
 job, so a failed run may leave a pending issue. Omit both proposal arguments for
-offline operation: ADT is neither imported nor contacted. Catalogue acceptance,
-payload completion, eligibility and trainer consumption remain separate results.
+offline operation: ADT is neither imported nor contacted. Check catalogue
+acceptance, payload completion and eligibility separately.
 
 ## Retry and verify
 
@@ -120,27 +117,8 @@ Nonempty outputs fail by default. Add `--resume` only when inputs, verified asse
 boundaries, partitioning, resources and native logs are compatible, and no readers
 or competing writers are active. Native completed tasks are reused; payloads are
 qualified again. The operator remains responsible for resume compatibility.
-The held completion/lifecycle policy gap remains open; this job adds no lifecycle
-policy and does not claim to seal releases. A tracked proposal does not close
-that gap or prove eligibility or trainer consumption.
+Explicit resume can reopen and mutate a completed unmerged output. Tracked runs
+protect accepted output references even with resume. Use fresh references and
+logging directories for changed data, assets or configuration.
 
 For offline verification and contributor checks, see [development](DEVELOPMENT.md).
-
-## Dataset adoption and historical recipes
-
-All 53 retained `.cfg` files (52 in `configs_apertus_v2/` and
-`example_config.cfg`) require migration. Their exact filenames and original bytes
-remain in this tree; the last supported dump runtime is recoverable at
-`28ad57a2757f6f72edb0def57ee725b6812f2df3`. This includes the four released
-CodeAlchemy configurations; their source-specific filtered-population checks remain.
-No retained config is accepted by the new CLI. The old `tokenize_script.sh`,
-`tokenize.sh`, dump preparation/size helpers and container launcher recipe are
-retired from the supported workflow.
-
-Each producer must establish actual root/input refs, preserve its real preparation,
-source approvals and exclusions, reconcile physical rehydration/filtering and source
-lineage, and choose a distinct output identity with the exact encoding recipe.
-Then record the reviewed command with that producer's adoption change. Keep actual
-frozen producing commits, payloads and maps; a later runtime merge cannot replace
-the identity that produced them. This paired draft remains open while private DPP integration
-access, producer-specific adoption and the held lifecycle decisions are unresolved.
