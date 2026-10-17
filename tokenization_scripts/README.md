@@ -82,15 +82,17 @@ identifies the corresponding root row in the text, metadata and Annotations.
 
 ## Record the code used by a run
 
-Add `--transparency` to the job command. With Python 3.11+ and the ADT SDK
+Add `--transparency` to the job command. With Python 3.11+ and the ADT Python package
 installed, the job records its output identifiers and the tokenizer repository's
-actual Git commit in an editable issue. The job checkout must be clean, committed
+actual Git commit in an editable issue. The commit of the job code is captured
+automatically; `--tokenizer-revision` identifies the tokenizer asset and may come
+from a different repository or commit. The job checkout must be clean, committed
 and pushed; capture works even when the command is launched from another directory.
 
 The default catalogue and issue destination is
 [`swiss-ai/apertus-data-transparency-draft`](https://github.com/swiss-ai/apertus-data-transparency-draft).
 Each tracked call fetches its latest accepted catalogue automatically. See
-DPP's `documentation/transparency.md` at the pinned checkout for SDK installation
+DPP's `documentation/transparency.md` at the pinned checkout for package installation
 and GitHub authentication.
 
 Open the printed issue URL and complete Sources, inputs, notes and any other

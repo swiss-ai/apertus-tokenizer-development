@@ -164,7 +164,7 @@ def run_job(
 
     ``job.transparency=True`` records identifiers and this job repository's actual
     clean pushed commit in ADT; a GitHub owner/repository string overrides the
-    destination. Tracking requires the ADT SDK and Python 3.11+. Input, encoding,
+    destination. Tracking requires the ADT Python package and Python 3.11+. Input, encoding,
     alignment and corruption errors fail the job. Resume reuses task completion
     records and requires compatible inputs, configuration and logs.
     """
@@ -290,7 +290,7 @@ def get_args(argv: list[str] | None = None) -> TokenizationJob:
     parser.add_argument(
         "--tokenizer-revision",
         required=True,
-        help="full Git commit containing the exact local asset bytes",
+        help="full Git commit containing the exact local tokenizer asset bytes; separate from the automatically captured commit of the job code",
     )
     parser.add_argument(
         "--logging-dir",
@@ -364,7 +364,7 @@ def main(argv: list[str] | None = None) -> None:
     except ImportError as error:
         raise SystemExit(
             "tokenization dependency unavailable; tracked runs require Python 3.11+ "
-            "and the coordinated ADT SDK (see the runbook)"
+            "and the supported ADT Python package (see the runbook)"
         ) from error
     except (OSError, ValueError) as error:
         raise SystemExit(f"tokenization failed: {error}") from error
