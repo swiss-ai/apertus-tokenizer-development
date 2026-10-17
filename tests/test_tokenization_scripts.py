@@ -6,7 +6,6 @@ import os
 import subprocess
 import sys
 from dataclasses import replace
-from decimal import Decimal
 from pathlib import Path
 
 import numpy as np
@@ -177,29 +176,28 @@ def test_asset_identity_does_not_expand_rewrites_or_store_credentials(
     assert identity["repository"] == "https://github.com/example/assets.git"
 
 
-def test_explicit_tracked_proposal_reaches_real_output_guard(
+def test_transparency_records_job_checkout_when_launched_elsewhere(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     from data_pipeline_pretrain.pipeline.root_data import coordinator
 
     job = prepare(tmp_path, ["a"])
-    proposal = rd.TrackedProposal(
-        payload={"id": "offline-forwarding"}, repo="example/catalogue", issue=7
-    )
+    producer = rd.GitContext("https://example.org/tokenizer.git", "a" * 40)
     submitted = []
 
-    def preflight(actual: rd.TrackedProposal, outputs: set[str]):
-        assert actual is proposal
+    def prepare_recording(outputs, destination, directory):
+        assert destination is True
+        assert directory == Path(__file__).resolve().parents[1]
         assert outputs == {str(OUTPUT), str(rd.token_length_ref(OUTPUT))}
         assert not rd.collection_path(job.data_root, ROOT, OUTPUT).exists()
-        return lambda: submitted.append(actual), outputs
+        return lambda: submitted.append(destination), producer
 
-    # Only the external ADT preflight/submission boundary is replaced. The real
-    # DPP guard, native executor, writers and final validators still run.
-    monkeypatch.setattr(coordinator, "_proposal_submission", preflight)
-    tokens, lengths = run_job(replace(job, tasks=1, workers=1, proposal=proposal))
-    assert submitted == [proposal]
+    monkeypatch.setattr(coordinator, "_prepare_recording", prepare_recording)
+    monkeypatch.chdir(tmp_path)
+    tokens, lengths = run_job(replace(job, tasks=1, workers=1, transparency=True))
+    assert submitted == [True]
     assert tokens.complete and lengths.complete
+    assert tokens.producer == lengths.producer == producer
 
 
 def test_empty_body_propagates_and_outputs_stay_incomplete(tmp_path: Path) -> None:
@@ -258,29 +256,12 @@ def test_cli_help_defaults_and_invalid_resources(tmp_path: Path) -> None:
         get_args([*arguments, "--workers", "2"])
     with pytest.raises(SystemExit):
         get_args([*arguments, "--batch-bytes", "0"])
-    payload = tmp_path / "proposal.json"
-    payload.write_text('{"id":"fixture","weight":0.12345678901234567890123456789}')
-    tracked = get_args(
-        [
-            *arguments,
-            "--proposal-file",
-            str(payload),
-            "--proposal-repo",
-            "example/catalogue",
-            "--proposal-issue",
-            "7",
-        ]
-    ).proposal
-    assert tracked is not None
-    assert tracked.repo == "example/catalogue" and tracked.issue == 7
-    assert tracked.payload["weight"] == Decimal("0.12345678901234567890123456789")
-    for extra in (
-        ["--proposal-file", str(payload)],
-        ["--proposal-repo", "example/catalogue"],
-        ["--proposal-issue", "7"],
-    ):
-        with pytest.raises(SystemExit):
-            get_args([*arguments, *extra])
+    assert job.transparency is False
+    assert get_args([*arguments, "--transparency"]).transparency is True
+    assert (
+        get_args([*arguments, "--transparency", "example/catalogue"]).transparency
+        == "example/catalogue"
+    )
 
 
 def test_actual_cli_uses_declared_primary_and_explicit_boundaries(

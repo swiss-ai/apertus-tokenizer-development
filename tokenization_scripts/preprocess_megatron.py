@@ -1,18 +1,16 @@
 """Tokenize exact root-aligned Data with a pinned local tokenizer asset.
 
 Run with ``python -m tokenization_scripts.preprocess_megatron --help``.
-No model download, dataset preparation or selection occurs. ADT tracking is opt-in.
+The job reads prepared text and loads a local tokenizer. ADT tracking is opt-in.
 """
 
 from __future__ import annotations
 
 import argparse
-import json
 import os
 import re
 import subprocess
 from dataclasses import dataclass
-from decimal import Decimal
 from functools import cached_property
 from pathlib import Path
 from typing import Any
@@ -27,11 +25,11 @@ from tokenizers import Tokenizer
 class TokenizationJob:
     """Exact input/output refs and local execution controls.
 
-    Tasks are total native partitions; workers run tasks concurrently; threads
+    Tasks divide root rows into disjoint ranges; workers run tasks concurrently; threads
     bound each worker's Rayon pool. Batches count rows and UTF-8 bytes, and pair
     limits count sequences. An oversize row runs alone without truncation.
     ``tokenizer_revision`` is the full Git commit containing ``tokenizer_file``.
-    Native logs and all settings must match when the operator requests resume.
+    Task logs and all settings must match when the operator requests resume.
     """
 
     data_root: Path
@@ -50,7 +48,7 @@ class TokenizationJob:
     batch_bytes: int = 32 * 1024**2
     max_sequences_per_shard: int = 100000
     resume: bool = False
-    proposal: rd.TrackedProposal | None = None
+    transparency: bool | str = False
 
     def __post_init__(self) -> None:
         for ref in (self.root_ref, self.input_ref, self.output_ref):
@@ -162,14 +160,13 @@ class LocalBodyEncoder:
 def run_job(
     job: TokenizationJob,
 ) -> tuple[rd.CollectionMetadata, rd.CollectionMetadata]:
-    """Guard both outputs, run native tasks, qualify sequences and publish lengths.
+    """Check outputs, execute tasks, validate stored sequences and publish lengths.
 
-    Raises on input/encoding/alignment/corruption errors; no row is filtered or
-    rehydrated. ADT is loaded/contacted only for an explicit ``job.proposal``.
-    Tracked mode checks the whole proposal before production and requires the
-    coordinated ADT SDK on Python 3.11+. Resume permits mutation and reuses native
-    completion records: it does not prove compatible inputs/config/logs or solve
-    the separately held completion/lifecycle policy.
+    ``job.transparency=True`` records identifiers and this job repository's actual
+    clean pushed commit in ADT; a GitHub owner/repository string overrides the
+    destination. Tracking requires the ADT SDK and Python 3.11+. Input, encoding,
+    alignment and corruption errors fail the job. Resume reuses task completion
+    records and requires compatible inputs, configuration and logs.
     """
     asset, identity = load_asset(job.tokenizer_file, job.tokenizer_revision)
     encoder = LocalBodyEncoder(asset)
@@ -229,7 +226,8 @@ def run_job(
         ],
         produce,
         resume=job.resume,
-        proposal=job.proposal,
+        transparency=job.transparency,
+        code_directory=Path(__file__).resolve().parents[1],
     )
 
 
@@ -298,7 +296,7 @@ def get_args(argv: list[str] | None = None) -> TokenizationJob:
         "--logging-dir",
         type=Path,
         required=True,
-        help="native logs/completions, reused unchanged for compatible resume",
+        help="task logs and completion records, reused for compatible resume",
     )
     parser.add_argument(
         "--prefix-tokens",
@@ -313,7 +311,7 @@ def get_args(argv: list[str] | None = None) -> TokenizationJob:
         help="comma-separated IDs inserted once after each body; empty string for none",
     )
     for flag, default, meaning in (
-        ("tasks", 1, "total native partitions"),
+        ("tasks", 1, "total task ranges over the root rows"),
         ("workers", 1, "concurrent processes; cannot exceed tasks"),
         (
             "threads",
@@ -329,7 +327,7 @@ def get_args(argv: list[str] | None = None) -> TokenizationJob:
         (
             "max-sequences-per-shard",
             100000,
-            "maximum sequences in one native BIN/IDX pair",
+            "maximum sequences in one BIN/IDX file pair",
         ),
     ):
         parser.add_argument(
@@ -341,39 +339,18 @@ def get_args(argv: list[str] | None = None) -> TokenizationJob:
     parser.add_argument(
         "--resume",
         action="store_true",
-        help="permit existing output mutation and reuse compatible native tasks (default: fail on nonempty output)",
+        help="permit existing output mutation and reuse compatible Datatrove tasks (default: fail on nonempty output)",
     )
     parser.add_argument(
-        "--proposal-file",
-        type=Path,
-        help="complete ADT change-set JSON, declaring token Data and automatic lengths; omitted disables tracking",
-    )
-    parser.add_argument(
-        "--proposal-repo",
-        help="explicit GitHub owner/repository for tracked submission; requires --proposal-file and ADT SDK (Python 3.11+)",
-    )
-    parser.add_argument(
-        "--proposal-issue",
-        type=positive_int,
-        help="open issue number to reuse for the exact whole record set; default discovers an unambiguous match",
+        "--transparency",
+        nargs="?",
+        const=True,
+        default=False,
+        metavar="OWNER/REPOSITORY",
+        help="record output IDs and the actual clean pushed job commit; defaults to the transparency catalogue, optional owner/repository overrides it (requires ADT and Python 3.11+)",
     )
     try:
         values = vars(parser.parse_args(argv))
-        file = values.pop("proposal_file")
-        repo = values.pop("proposal_repo")
-        issue = values.pop("proposal_issue")
-        if bool(file) != bool(repo) or (issue is not None and file is None):
-            raise ValueError(
-                "--proposal-file and --proposal-repo are required together; --proposal-issue requires both"
-            )
-        if file is not None:
-            # Preserve decimal values for ADT's lossless metadata contract.
-            payload = json.loads(file.read_text(encoding="utf-8"), parse_float=Decimal)
-            if not isinstance(payload, dict):
-                raise ValueError("proposal JSON must be a complete change-set object")
-            values["proposal"] = rd.TrackedProposal(
-                payload=payload, repo=repo, issue=issue
-            )
         return TokenizationJob(**values)
     except (OSError, ValueError) as error:
         parser.error(str(error))

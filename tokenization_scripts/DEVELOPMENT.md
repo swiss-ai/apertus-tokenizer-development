@@ -11,12 +11,13 @@ ruff format --check tokenization_scripts/preprocess_megatron.py tests/test_token
 python -m pytest -q
 ```
 
-The workflow tests construct a tiny local Git-pinned tokenizer/root, execute native
+The workflow tests construct a tiny local Git-pinned tokenizer/root, execute Datatrove
 workers fresh and resumed, verify exact sequences/lengths and uint16/int32 dtypes,
-assert no maps, and reject modified assets, missing roots, empty bodies and corrupt
-output. They use local fixtures and execute native workers on the test machine.
-The tracked-proposal forwarding check mocks the external ADT preflight/submission
-boundary and runs the DPP guard, executor and payload checks locally.
+and reject modified assets, missing roots, empty bodies and corrupt
+output. They use local fixtures and execute Datatrove workers on the test machine.
+The transparency forwarding check replaces catalogue and GitHub operations, then
+runs the DPP guard, executor and stored-data checks locally. It verifies capture
+uses the job checkout even when the launch directory differs.
 
 Hosted style and config-file checks use public prerequisites. Hosted paired
 integration is disabled unless an owner sets

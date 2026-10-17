@@ -1,10 +1,12 @@
 # Root-aligned tokenization
 
-`preprocess_megatron.py` uses DPP's callback-based `TokenWriter`. It reads completed
-exact DPP root and primary-text Data, preserves every row in root order, and writes
-new aligned token Data plus its automatic Int64 `stored_tokens` Annotation. Dataset preparation
-and physical population changes belong to the preparation producer; the sampler
-owns selection and its run maps.
+`preprocess_megatron.py` uses DPP's `TokenWriter` with a batch encoder function.
+A **Data** is a named collection of content; a **root Data** fixes its row
+population and order. The job reads completed root and primary-text Data,
+preserves every row in root order, and writes aligned token Data plus its
+automatic `stored_tokens` Annotation, a per-row Int64 token count. Dataset
+preparation and physical population changes belong to the preparation producer;
+the sampler owns selection and its run maps.
 
 ## Set up compatible code
 
@@ -30,7 +32,7 @@ responsibility.
 
 ## Run a job
 
-The input must already have complete root-aligned metadata and payloads beneath
+The input must already have complete root-aligned metadata and data files beneath
 one physical `data_root`. Use the exact root and primary-text Data references
 identifying the completed producer outputs. Choose a distinct output token Data
 reference with its own revision. The command takes explicit CLI arguments.
@@ -55,15 +57,16 @@ python -m tokenization_scripts.preprocess_megatron \
   --tasks 8 --workers 2 --threads 4
 ```
 
-The shown boundary IDs are examples: check the actual asset and encoding recipe.
+Prefix and suffix IDs are boundary tokens placed before and after each encoded
+text. The shown IDs are examples: check the actual asset and encoding settings.
 Both boundary arguments are required; pass an empty string for no prefix/suffix.
 The body uses `add_special_tokens=False`. DPP inserts configured boundaries once.
-The primary text field comes from the input Data's `primary_content` semantics;
+The primary text field comes from the input Data's `primary_content` metadata field;
 user IDs are unnecessary for root alignment. Empty text, empty encoded bodies,
-wrong output refs, missing input, cardinality/alignment problems and invalid IDs
+wrong output refs, missing input, different row counts or order and invalid IDs
 fail the job.
 
-`--tasks` counts deterministic native partitions; `--workers` counts concurrent
+`--tasks` counts disjoint ranges of root rows; `--workers` counts concurrent
 processes, and `--threads` sets each process's Rayon pool. Defaults are one each.
 Budget workers × threads within allocated CPUs. `--batch-size` defaults to 1000
 rows and `--batch-bytes` to 33554432 UTF-8 bytes. A single oversize row runs alone
@@ -71,52 +74,42 @@ without truncation. `--max-sequences-per-shard` defaults to 100000 index entries
 The output writer uses uint16/code8 for vocabularies through 65536 IDs, otherwise
 nonnegative int32/code4. Output sharding may differ from input Parquet sharding.
 
-`run_producer` guards token Data and automatic lengths. Each native task writes
+`run_producer` guards token Data and automatic lengths. Each Datatrove task writes
 BIN/IDX and lengths, including explicit empty pairs for idle tasks. Finalization
-checks native completion, exact pair coverage, token IDs/boundaries, lengths and
-corruption before marking both collections complete. Each sequence ordinal
+checks Datatrove completion, exact pair coverage, token IDs/boundaries, lengths and
+corruption before marking both collections complete. Each zero-based sequence number
 identifies the corresponding root row in the text, metadata and Annotations.
 
-## Track a run in transparency
+## Record the code used by a run
 
-Tracking is optional. For a tracked run, use Python 3.11+ and the coordinated ADT
-SDK with authenticated access to your chosen catalogue. Follow DPP's
-`documentation/transparency.md` in the pinned checkout for installation, destination
-setup, producer capture and offline schema/semantic preview. Keep credentials out
-of the command and payload.
+Add `--transparency` to the job command. With Python 3.11+ and the ADT SDK
+installed, the job records its output identifiers and the tokenizer repository's
+actual Git commit in an editable issue. The job checkout must be clean, committed
+and pushed; capture works even when the command is launched from another directory.
 
-Create one complete change-set JSON file from your reviewed declarations. It must
-declare the new aligned token Data and its automatic Annotation
-`annotation/<token-slug>-token-lengths@<token-revision>`, plus any related records.
-The token Data names the exact prepared text input; the Annotation describes the
-token Data. Use actual catalogue identities and the pushed reproducible producer
-commit. Preview this full payload before running; ADT's
-`json_dumps(payload, indent=2)` from `adt.lossless` preserves exact decimal values
-when writing JSON.
+The default catalogue and issue destination is
+[`swiss-ai/apertus-data-transparency-draft`](https://github.com/swiss-ai/apertus-data-transparency-draft).
+Each tracked call fetches its latest accepted catalogue automatically. See
+DPP's `documentation/transparency.md` at the pinned checkout for SDK installation
+and GitHub authentication.
 
-Add these arguments to the job command above:
+Open the printed issue URL and complete Sources, inputs, notes and any other
+required declaration fields there. The skeleton contains output identities and
+run code; its declaration checks fail until it is complete. A retry reuses the
+pending issue and preserves human edits. Another actual run commit adds a comment.
+The issue is created before tokenization, so verify actual output completion and
+catalogue acceptance separately.
 
-```sh
---proposal-file "$CHANGE_SET_JSON" --proposal-repo "$CATALOGUE_OWNER_REPO"
-```
-
-`CATALOGUE_OWNER_REPO` is an explicit GitHub `owner/repository`. Add
-`--proposal-issue N` to reuse an open issue with that exact whole record set;
-omitting it lets DPP discover an unambiguous match. The Python API accepts the
-same `rd.TrackedProposal` as `TokenizationJob(..., proposal=proposal)`.
-
-DPP checks accepted identities, proposal validity and pending reuse before
-mutating outputs. It submits the pending proposal before executing the native
-job, so a failed run may leave a pending issue. Omit both proposal arguments for
-offline operation: ADT is neither imported nor contacted. Check catalogue
-acceptance, payload completion and eligibility separately.
+Use `--transparency owner/repository` for another catalogue. The Python API takes
+`TokenizationJob(..., transparency=True)` or the same repository string.
+Omitting the flag runs offline with no ADT lookup.
 
 ## Retry and verify
 
 Nonempty outputs fail by default. Add `--resume` only when inputs, verified asset,
-boundaries, partitioning, resources and native logs are compatible, and no readers
-or competing writers are active. Native completed tasks are reused; payloads are
-qualified again. The operator remains responsible for resume compatibility.
+boundaries, partitioning, resources and Datatrove logs are compatible, and no readers
+or competing writers are active. Completed Datatrove tasks are reused; stored
+sequences and lengths are validated again. The operator remains responsible for resume compatibility.
 Explicit resume can reopen and mutate a completed unmerged output. Tracked runs
 protect accepted output references even with resume. Use fresh references and
 logging directories for changed data, assets or configuration.
