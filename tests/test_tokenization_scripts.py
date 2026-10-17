@@ -70,7 +70,7 @@ def prepare(
     )
     revision = git(assets, "rev-parse", "HEAD")
     root = tmp_path / "collections"
-    writer = rd.InitialRootParquetWriter(
+    writer = rd.RootWriter(
         root,
         ROOT,
         schema=pa.schema([(text_column, pa.string())]),

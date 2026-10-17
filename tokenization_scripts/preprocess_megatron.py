@@ -197,7 +197,7 @@ def run_job(
             id_key=None,
             batch_size=job.batch_size,
         )
-        writer = rd.AlignedTokenWriter(
+        writer = rd.TokenWriter(
             source,
             job.output_ref,
             tasks=job.tasks,

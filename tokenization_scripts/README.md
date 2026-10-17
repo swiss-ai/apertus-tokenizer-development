@@ -1,8 +1,8 @@
 # Root-aligned tokenization
 
-`preprocess_megatron.py` is the supported job. It reads completed exact DPP root
-and primary-text Data, preserves every row in root order, and writes new aligned
-token Data plus its automatic Int64 `stored_tokens` Annotation. Dataset preparation
+`preprocess_megatron.py` uses DPP's callback-based `TokenWriter`. It reads completed
+exact DPP root and primary-text Data, preserves every row in root order, and writes
+new aligned token Data plus its automatic Int64 `stored_tokens` Annotation. Dataset preparation
 and physical population changes belong to the preparation producer; the sampler
 owns selection and its run maps.
 
