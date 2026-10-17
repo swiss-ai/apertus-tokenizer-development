@@ -1,166 +1,377 @@
+"""Tokenize exact root-aligned Data with a pinned local tokenizer asset.
+
+Run with ``python -m tokenization_scripts.preprocess_megatron --help``.
+The job reads prepared text and loads a local tokenizer. ADT tracking is opt-in.
 """
-python3 preprocess_megatron.py --tokenizer-name-or-path meta-llama/Meta-Llama-3-8B --output-folder tokenized_datasets/fineweb-edu --n-tasks 16 --dataset datasets/fineweb-edu/raw-dataset-link --paths-file datasets/fineweb-edu/dumps/paths_file_0.txt
-"""
+
+from __future__ import annotations
 
 import argparse
+import os
+import re
+import subprocess
+from dataclasses import dataclass
+from functools import cached_property
+from pathlib import Path
+from typing import Any
+from urllib.parse import urlsplit, urlunsplit
 
-from data_pipeline_pretrain.pipeline.tokens import (
-    MegatronDocumentTokenizer,
-    ProvenanceParquetReader,
-    Rehydrater,
-)
+from data_pipeline_pretrain.pipeline import root_data as rd
 from datatrove.executor.local import LocalPipelineExecutor
-from datatrove.pipeline.readers import JsonlReader
+from tokenizers import Tokenizer
 
 
-def positive_int(value):
+@dataclass(frozen=True)
+class TokenizationJob:
+    """Exact input/output refs and local execution controls.
+
+    Tasks divide root rows into disjoint ranges; workers run tasks concurrently; threads
+    bound each worker's Rayon pool. Batches count rows and UTF-8 bytes, and pair
+    limits count sequences. An oversize row runs alone without truncation.
+    ``tokenizer_revision`` is the full Git commit containing ``tokenizer_file``.
+    Task logs and all settings must match when the operator requests resume.
+    """
+
+    data_root: Path
+    root_ref: rd.ArtifactRef
+    input_ref: rd.ArtifactRef
+    output_ref: rd.ArtifactRef
+    tokenizer_file: Path
+    tokenizer_revision: str
+    logging_dir: Path
+    prefix_tokens: tuple[int, ...]
+    suffix_tokens: tuple[int, ...]
+    tasks: int = 1
+    workers: int = 1
+    threads: int = 1
+    batch_size: int = 1000
+    batch_bytes: int = 32 * 1024**2
+    max_sequences_per_shard: int = 100000
+    resume: bool = False
+    transparency: bool | str = False
+
+    def __post_init__(self) -> None:
+        for ref in (self.root_ref, self.input_ref, self.output_ref):
+            if ref.kind != "data":
+                raise ValueError("root, input and output refs must identify Data")
+        if self.output_ref in (self.root_ref, self.input_ref):
+            raise ValueError("output must be a distinct aligned Data revision")
+        for name in (
+            "tasks",
+            "workers",
+            "threads",
+            "batch_size",
+            "batch_bytes",
+            "max_sequences_per_shard",
+        ):
+            value = getattr(self, name)
+            if type(value) is not int or value < 1:
+                raise ValueError(f"{name} must be a positive integer")
+        if self.workers > self.tasks:
+            raise ValueError("workers cannot exceed total tasks")
+        if not re.fullmatch(r"[0-9a-f]{40}", self.tokenizer_revision):
+            raise ValueError(
+                "tokenizer revision must be a full 40-character Git commit"
+            )
+        if type(self.resume) is not bool:
+            raise ValueError("resume must be a boolean")
+
+
+def _git(folder: Path, *arguments: str) -> bytes:
+    try:
+        return subprocess.check_output(
+            ["git", "-C", str(folder), *arguments], stderr=subprocess.PIPE
+        )
+    except subprocess.CalledProcessError as error:
+        raise ValueError(
+            f"cannot identify local tokenizer asset: {error.stderr.decode().strip()}"
+        ) from error
+
+
+def _repository_url(origin: str) -> str:
+    """Keep a fetchable source identity without URL credentials or Git rewrites."""
+    scp = re.fullmatch(r"[^@/]+@([^:/]+):(.+)", origin)
+    if scp:
+        origin = f"ssh://{scp[1]}/{scp[2]}"
+    parsed = urlsplit(origin)
+    if parsed.scheme not in ("https", "http", "ssh", "git") or not parsed.hostname:
+        raise ValueError(
+            "tokenizer origin must be a fetchable HTTPS or SSH repository URL"
+        )
+    host = parsed.netloc.rsplit("@", 1)[-1]
+    if parsed.hostname.lower() == "github.com":
+        path = parsed.path.rstrip("/")
+        if not path.endswith(".git"):
+            path += ".git"
+        return urlunsplit(("https", "github.com", path, "", ""))
+    return urlunsplit((parsed.scheme, host, parsed.path, "", ""))
+
+
+def load_asset(path: Path, revision: str) -> tuple[bytes, dict[str, Any]]:
+    """Verify local asset bytes against an exact Git commit, without network I/O.
+
+    The asset must be tracked beneath a Git worktree with an origin URL. A local
+    edit, untracked asset or wrong revision fails before output mutation. Returning
+    the verified bytes keeps worker loading independent of later filesystem edits.
+    """
+    path = path.resolve(strict=True)
+    repository = Path(
+        _git(path.parent, "rev-parse", "--show-toplevel").decode().strip()
+    )
+    relative = path.relative_to(repository).as_posix()
+    if _git(repository, "cat-file", "-t", revision).strip() != b"commit":
+        raise ValueError("tokenizer revision must identify a Git commit")
+    pinned = _git(repository, "show", f"{revision}:{relative}")
+    if path.read_bytes() != pinned:
+        raise ValueError(
+            "local tokenizer bytes differ from the configured Git revision"
+        )
+    # get-url expands machine insteadOf rewrites, which may contain credentials.
+    origin = _repository_url(
+        _git(repository, "config", "--get", "remote.origin.url").decode().strip()
+    )
+    return pinned, {"repository": origin, "commit": revision, "path": relative}
+
+
+@dataclass
+class LocalBodyEncoder:
+    """Load verified local JSON and encode bodies with special tokens disabled.
+
+    Asset truncation and padding are explicitly disabled; DPP alone inserts the
+    job's prefix and suffix. One output body corresponds to every input text.
+    """
+
+    asset: bytes
+
+    @cached_property
+    def tokenizer(self) -> Tokenizer:
+        tokenizer = Tokenizer.from_str(self.asset.decode("utf-8"))
+        tokenizer.no_truncation()
+        tokenizer.no_padding()
+        return tokenizer
+
+    def __call__(self, texts: list[str]) -> list[list[int]]:
+        return [
+            row.ids
+            for row in self.tokenizer.encode_batch(texts, add_special_tokens=False)
+        ]
+
+
+def run_job(
+    job: TokenizationJob,
+) -> tuple[rd.CollectionMetadata, rd.CollectionMetadata]:
+    """Check outputs, execute tasks, validate stored sequences and publish lengths.
+
+    ``job.transparency=True`` records identifiers and this job repository's actual
+    clean pushed commit in ADT; a GitHub owner/repository string overrides the
+    destination. Tracking requires the ADT Python package and Python 3.11+. Input, encoding,
+    alignment and corruption errors fail the job. Resume reuses task completion
+    records and requires compatible inputs, configuration and logs.
+    """
+    asset, identity = load_asset(job.tokenizer_file, job.tokenizer_revision)
+    encoder = LocalBodyEncoder(asset)
+    vocabulary_size = encoder.tokenizer.get_vocab_size(with_added_tokens=True)
+    os.environ["RAYON_NUM_THREADS"] = str(job.threads)
+    os.environ["TOKENIZERS_PARALLELISM"] = "true"
+    encoding = {
+        "tokenizer": identity,
+        "add_special_tokens": False,
+        "truncation": None,
+        "padding": None,
+    }
+
+    def produce() -> tuple[rd.CollectionMetadata, rd.CollectionMetadata]:
+        primary = rd.read_metadata(
+            job.data_root, job.root_ref, job.input_ref
+        ).semantics.get("primary_content")
+        if not isinstance(primary, str) or not primary:
+            raise ValueError("input Data must declare a primary text field")
+        source = rd.RootParquetReader(
+            job.data_root,
+            job.root_ref,
+            job.input_ref,
+            text_key=primary,
+            id_key=None,
+            batch_size=job.batch_size,
+        )
+        writer = rd.TokenWriter(
+            source,
+            job.output_ref,
+            tasks=job.tasks,
+            vocabulary_size=vocabulary_size,
+            encoding=encoding,
+            encoder=encoder,
+            prefix_tokens=job.prefix_tokens,
+            suffix_tokens=job.suffix_tokens,
+            batch_size=job.batch_size,
+            batch_bytes=job.batch_bytes,
+            max_sequences_per_shard=job.max_sequences_per_shard,
+        )
+        writer.prepare()
+        executor = LocalPipelineExecutor(
+            [source, writer],
+            tasks=job.tasks,
+            workers=job.workers,
+            logging_dir=str(job.logging_dir),
+            start_method="spawn",
+        )
+        executor.run()
+        return writer.finalize(executor)
+
+    return rd.run_producer(
+        job.data_root,
+        [
+            rd.OutputCollection(job.root_ref, ref)
+            for ref in (job.output_ref, rd.token_length_ref(job.output_ref))
+        ],
+        produce,
+        resume=job.resume,
+        transparency=job.transparency,
+        code_directory=Path(__file__).resolve().parents[1],
+    )
+
+
+def positive_int(value: str) -> int:
+    """Argparse positive integer, used for counts and byte limits."""
     parsed = int(value)
     if parsed < 1:
         raise argparse.ArgumentTypeError("must be a positive integer")
     return parsed
 
 
-def get_args(argv=None):
-    parser = argparse.ArgumentParser()
+def token_ids(value: str) -> tuple[int, ...]:
+    """Parse comma-separated boundary IDs; an empty string means no boundary."""
+    if not value:
+        return ()
+    try:
+        result = tuple(int(item) for item in value.split(","))
+    except ValueError as error:
+        raise argparse.ArgumentTypeError(
+            "use comma-separated nonnegative integer IDs"
+        ) from error
+    if any(token < 0 for token in result):
+        raise argparse.ArgumentTypeError("boundary IDs must be nonnegative")
+    return result
 
-    group = parser.add_argument_group(title="Tokenizer")
-    group.add_argument(
-        "--tokenizer-name-or-path",
-        type=str,
-        required=True,
-        help="A path to a directory containing vocabulary files required by the tokenizer or the model id of a predefined tokenizer hosted inside a model repo on the Hugging Face Hub.",
-    )
-    group.add_argument(
-        "--eos-token",
-        type=str,
-        default=None,
-        help="EOS token to add after each document. Default: None",
-    )
-    group.add_argument(
-        "--batch-size",
-        type=positive_int,
-        default=10_000,
-        help="Maximum documents per tokenizer call. Default: 10000",
-    )
-    group.add_argument(
-        "--batch-bytes",
-        type=positive_int,
-        default=32 * 1024**2,
-        help="Maximum UTF-8 input bytes per tokenizer call. Default: 33554432",
-    )
 
-    group = parser.add_argument_group(title="Output data")
-    group.add_argument(
-        "--output-folder",
-        type=str,
+def get_args(argv: list[str] | None = None) -> TokenizationJob:
+    """Parse the one supported root-aligned CLI; boundary IDs are explicit."""
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--data-root",
+        type=Path,
         required=True,
-        help="Path to the output folder to store the tokenized documents",
+        help="physical local root collection directory",
     )
-    group = parser.add_argument_group(title="Miscellaneous configs")
-    group.add_argument(
+    parser.add_argument(
+        "--root-ref",
+        type=rd.ArtifactRef.parse,
+        required=True,
+        help="exact root Data reference: data/slug@revision",
+    )
+    parser.add_argument(
+        "--input-ref",
+        type=rd.ArtifactRef.parse,
+        required=True,
+        help="exact same-root primary text Data reference",
+    )
+    parser.add_argument(
+        "--output-ref",
+        type=rd.ArtifactRef.parse,
+        required=True,
+        help="new aligned token Data reference; lengths are automatic",
+    )
+    parser.add_argument(
+        "--tokenizer-file",
+        type=Path,
+        required=True,
+        help="local Git-tracked tokenizer.json; never downloads",
+    )
+    parser.add_argument(
+        "--tokenizer-revision",
+        required=True,
+        help="full Git commit containing the exact local tokenizer asset bytes; separate from the automatically captured commit of the job code",
+    )
+    parser.add_argument(
         "--logging-dir",
-        type=str,
-        default=None,
-        help="Path to a folder for storing the logs of the preprocessing step. Default: None",
-    )
-    group.add_argument(
-        "--n-tasks",
-        type=int,
-        default=8,
-        help="Total number of tasks to run the preprocessing step. Default: 8",
-    )
-    group.add_argument(
-        "--n-workers",
-        type=int,
-        default=-1,
-        help="Number of workers executing concurrently --n-tasks tasks. Default: -1, which means --n-workers==--n-tasks",
-    )
-    group = parser.add_argument_group(title="Dataset configs")
-    group.add_argument(
-        "--dataset",
-        type=str,
+        type=Path,
         required=True,
-        help="Path to a folder recursively containing multiple .parquet files",
+        help="task logs and completion records, reused for compatible resume",
     )
-    group.add_argument(
-        "--paths-file",
-        type=str,
+    parser.add_argument(
+        "--prefix-tokens",
+        type=token_ids,
         required=True,
-        help="A file with one path per line (without the `dataset` prefix) to read",
+        help="comma-separated IDs inserted once before each body; empty string for none",
     )
-    group.add_argument(
-        "--column",
-        type=str,
-        default="text",
-        help="Column to preprocess from the Dataset. Default: text",
+    parser.add_argument(
+        "--suffix-tokens",
+        type=token_ids,
+        required=True,
+        help="comma-separated IDs inserted once after each body; empty string for none",
     )
-    group.add_argument(
-        "--rehydrate",
-        type=str,
-        default="False",
-        help="Whether to rehydrate the dataset. Default: False",
-    )
-    group.add_argument(
-        "--extension",
-        type=str,
-        default=".parquet",
-        help="File extension to use. e.g. .parquet or .jsonl.zst. Default: .parquet",
-    )
-
-    args = parser.parse_args(argv)
-
-    return args
-
-
-def main(args):
-    n_tasks = args.n_tasks
-    # Check number of files > n tasks
-    with open(args.paths_file, "rb") as f:
-        number_of_files = sum(1 for _ in f)
-    if n_tasks > number_of_files:
-        n_tasks = number_of_files
-
-    if "jsonl" in args.extension:
-        reader = JsonlReader(
-            data_folder=args.dataset,
-            paths_file=args.paths_file,
-            text_key=args.column,
+    for flag, default, meaning in (
+        ("tasks", 1, "total task ranges over the root rows"),
+        ("workers", 1, "concurrent processes; cannot exceed tasks"),
+        (
+            "threads",
+            1,
+            "Rayon threads per worker; budget workers*threads within allocation CPUs",
+        ),
+        ("batch-size", 1000, "maximum rows per encoding call"),
+        (
+            "batch-bytes",
+            32 * 1024**2,
+            "maximum input UTF-8 bytes per call; oversize rows run alone",
+        ),
+        (
+            "max-sequences-per-shard",
+            100000,
+            "maximum sequences in one BIN/IDX file pair",
+        ),
+    ):
+        parser.add_argument(
+            f"--{flag}",
+            type=positive_int,
+            default=default,
+            help=f"{meaning} (default: {default})",
         )
-        write_source_map = False
-    else:
-        reader = ProvenanceParquetReader(
-            data_folder=args.dataset,
-            paths_file=args.paths_file,
-            text_key=args.column,
-        )
-        write_source_map = True
+    parser.add_argument(
+        "--resume",
+        action="store_true",
+        help="permit existing output mutation and reuse compatible Datatrove tasks (default: fail on nonempty output)",
+    )
+    parser.add_argument(
+        "--transparency",
+        nargs="?",
+        const=True,
+        default=False,
+        metavar="OWNER/REPOSITORY",
+        help="record output IDs and the actual clean pushed job commit; defaults to the transparency catalogue, optional owner/repository overrides it (requires ADT and Python 3.11+)",
+    )
+    try:
+        values = vars(parser.parse_args(argv))
+        return TokenizationJob(**values)
+    except (OSError, ValueError) as error:
+        parser.error(str(error))
 
-    do_rehydrate = args.rehydrate is not None and args.rehydrate.lower() in (
-        "true",
-        "1",
-        "yes",
+
+def main(argv: list[str] | None = None) -> None:
+    """Execute the parsed local job and report validated row/token totals."""
+    job = get_args(argv)
+    try:
+        tokens, _ = run_job(job)
+    except ImportError as error:
+        raise SystemExit(
+            "tokenization dependency unavailable; tracked runs require Python 3.11+ "
+            "and the supported ADT Python package (see the runbook)"
+        ) from error
+    except (OSError, ValueError) as error:
+        raise SystemExit(f"tokenization failed: {error}") from error
+    print(
+        f"Ready: {tokens.member_ref}; {tokens.row_count} rows, {tokens.semantics['token_count']} stored tokens"
     )
-    preprocess_executor = LocalPipelineExecutor(
-        pipeline=[
-            reader,
-            *([Rehydrater()] if do_rehydrate else []),
-            MegatronDocumentTokenizer(
-                output_folder=args.output_folder,
-                tokenizer_name_or_path=args.tokenizer_name_or_path,
-                eos_token=args.eos_token,
-                batch_size=args.batch_size,
-                batch_bytes=args.batch_bytes,
-                provenance=write_source_map,
-            ),
-        ],
-        tasks=n_tasks,
-        workers=args.n_workers,
-        start_method="spawn",
-        logging_dir=args.logging_dir,
-    )
-    preprocess_executor.run()
 
 
 if __name__ == "__main__":
-    _args = get_args()
-    main(_args)
+    main()
