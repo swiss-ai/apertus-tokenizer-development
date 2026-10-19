@@ -2,9 +2,8 @@
 """Generate one ordinary tokenizer config per sealed Apertus SFT source.
 
 The source partition manifest is produced by data-pipeline-pretrain's
-`pipelines/apertus-sft-pretrain/main_3_partition_sources.py`. Keeping this generator
-next to `tokenize_script.sh` avoids introducing a second tokenization path:
-each config simply points that existing launcher at one source-pure Parquet
+`pipelines/apertus-sft-pretrain/main_3_partition_sources.py`. Each generated config
+points `tokenization_scripts/tokenize_script.sh` at one source-pure Parquet
 directory. The already-tokenized mixed release is backfilled separately without
 running the tokenizer again.
 """
@@ -196,10 +195,11 @@ def main() -> int:
     parser.add_argument(
         "--template",
         type=Path,
-        default=Path(__file__).resolve().parent
-        / "configs_apertus_v2/Apertus-1.5-SFT-mix-pretrain-v1.cfg",
+        default=Path(__file__).resolve().parents[1]
+        / "tokenization_scripts/configs_apertus_v2/Apertus-1.5-SFT-mix-pretrain-v1.cfg",
         help="Config copied for every source with the per-source keys replaced. "
-        "Default: configs_apertus_v2/Apertus-1.5-SFT-mix-pretrain-v1.cfg",
+        "Default: tokenization_scripts/configs_apertus_v2/"
+        "Apertus-1.5-SFT-mix-pretrain-v1.cfg",
     )
     parser.add_argument(
         "--config-dir",

@@ -8,7 +8,7 @@ source-pure Parquet root written by data-pipeline-pretrain's
 ## Generate the configs
 
 ```bash
-python3 tokenization_scripts/generate_apertus_sft_source_configs.py \
+python3 utils/generate_apertus_sft_source_configs.py \
   --partition-manifest /capstor/.../Apertus-1.5-SFT-mix-pretrain-v1-by-source/_SOURCE_PARTITION_SUCCESS.json \
   --text-root /capstor/.../Apertus-1.5-SFT-mix-pretrain-v1-by-source \
   --token-root /capstor/.../datasets_tokenized/Apertus-1.5-SFT-mix-pretrain-v1-by-source_apertus_v2 \

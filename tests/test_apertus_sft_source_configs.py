@@ -6,7 +6,7 @@ from pathlib import Path
 
 SCRIPT = (
     Path(__file__).resolve().parents[1]
-    / "tokenization_scripts/generate_apertus_sft_source_configs.py"
+    / "utils/generate_apertus_sft_source_configs.py"
 )
 SPEC = importlib.util.spec_from_file_location("apertus_sft_source_configs", SCRIPT)
 assert SPEC is not None and SPEC.loader is not None
