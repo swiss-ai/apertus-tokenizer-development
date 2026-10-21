@@ -4,3 +4,9 @@ REPORT_METADATA.md
 FEEDBACK.md
 apertus_team_pitch_deck.md
 SHORTCOMINGS.md
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.venv/
