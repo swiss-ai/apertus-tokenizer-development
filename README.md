@@ -109,3 +109,4 @@ Preliminary. All four folders prepend `<s>` and append `</s>` via their post-pro
 The supported tokenization job reads exact root-aligned Data and writes aligned
 Parquet token cells with exact stored lengths. See the [runbook](tokenization_scripts/README.md)
 for pinned DPP setup, local assets, explicit boundaries, resources and validation.
+The runbook also covers [recording the producing commit in ADT](tokenization_scripts/README.md#record-the-producing-commit).

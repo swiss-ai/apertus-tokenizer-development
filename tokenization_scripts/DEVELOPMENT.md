@@ -27,4 +27,5 @@ executor logs omit the model bytes.
 
 Run the checks on Python 3.10 and 3.12 with the exact paired DPP commit in
 `dpp-revision.txt`. The configured pytest command discovers the complete test
-suite.
+suite. For recording tests, [install the pinned optional ADT SDK](README.md#record-the-producing-commit)
+and run the same suite on Python 3.11 and 3.12.

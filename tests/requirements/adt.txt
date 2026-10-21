@@ -1,0 +1,2 @@
+# Optional recording integration; Python >=3.11 and private ADT read access.
+apertus-data-transparency-draft @ git+https://github.com/swiss-ai/apertus-data-transparency-draft.git@6f4a8238479a326f95ea494409126203efd8330e

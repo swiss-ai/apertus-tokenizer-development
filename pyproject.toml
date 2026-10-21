@@ -7,7 +7,7 @@ line-length = 88
 target-version = "py310"
 
 [tool.mypy]
-files = ["tokenization_scripts/tokenize.py", "tokenization_scripts/slurm.py"]
+files = ["tokenization_scripts/tokenize.py", "tokenization_scripts/slurm.py", "tokenization_scripts/recorded.py"]
 python_version = "3.10"
 # Resolve tokenization_scripts as a namespace package from the repository root.
 explicit_package_bases = true
@@ -24,4 +24,9 @@ module = [
     "pyarrow.*",
     "tokenizers.*",
 ]
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+# Optional ADT integration uses the SDK without published type information.
+module = ["adt.*"]
 ignore_missing_imports = true

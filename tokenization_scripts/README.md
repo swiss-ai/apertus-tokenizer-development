@@ -166,3 +166,45 @@ reserves unfinished output before returning `(writer, executor)`. Local executor
 finish synchronously. A Slurm executor needs dependent publication, as shown in
 [`slurm.py`](slurm.py); calling `finalize` immediately after submission is premature.
 Use fresh Data references and logs for changed inputs, assets or configuration.
+
+## Record the producing commit
+
+ADT connects the token Data identifier to the repository and commit used to run
+the job, so others can reproduce it. Use Python 3.11 or newer and install the
+pinned optional SDK with access to its repository:
+
+```sh
+gh auth login
+gh auth setup-git
+python -m pip install -r tests/requirements/adt.txt
+```
+
+Commit and push the job configuration and code before running. Replace
+`python -m tokenization_scripts.tokenize` in the job command with
+`python -m tokenization_scripts.recorded`, keeping the same job arguments. The
+command captures this tokenizer checkout, refreshes the shared ADT catalogue,
+binds the producer before submission, and submits a run issue from the dependent
+publication job after physical finalization. It accepts the same scheduler flags;
+use `--local` for a single-machine smoke test.
+Add `--adt-repo owner/catalogue` to choose another catalogue and issue destination.
+Matching pending run issues are reused by the SDK.
+
+The issue records the exact output identifier and producing commit. Fill in
+Sources, inputs, notes and other declaration fields there before review. Physical
+completion and catalogue acceptance are separate checks. Explicit `--resume`
+retains the producer stored in `producer.json` beside the native task completions;
+use that same checkout with compatible job settings. A changed producer or completed
+tasks missing this record fail before workers run. The core job's
+`prepare_job(job)` reserves unfinished output before this binding; the recording
+command then runs and finalizes the ordinary native pipeline.
+
+If issue submission fails after token Data completes, keep the completed output
+and submit its record from the original producer checkout:
+
+```python
+from adt.recording import prepare_run
+
+print(prepare_run(["data/my-tokens@v1"]).submit())
+```
+
+For owning checks, see [development](DEVELOPMENT.md).
