@@ -18,13 +18,16 @@ class TokenizationScriptTest(unittest.TestCase):
         )
         self.assertIn("srun --ntasks=1", worker)
 
-    def capture_sbatch_arguments(self, tasks, extra_config=()):
+    def capture_sbatch_arguments(self, tasks, extra_config=(), file_count=None):
+        if file_count is None:
+            file_count = tasks
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             metadata = root / "metadata"
             (metadata / "dumps").mkdir(parents=True)
             (metadata / "dumps" / "paths_file_0.txt").write_text(
-                "part.parquet\n", encoding="utf-8"
+                "".join(f"part-{i}.parquet\n" for i in range(file_count)),
+                encoding="utf-8",
             )
             output = root / "output"
             output.mkdir()
@@ -188,6 +191,26 @@ class TokenizationScriptTest(unittest.TestCase):
             ],
         )
         self.assertEqual(arguments[-4:], ["500", "16777216", "2", "64"])
+
+    def test_adaptive_defaults_use_at_most_thirty_two_workers(self):
+        arguments = self.capture_sbatch_arguments(tasks=64)
+        self.assertEqual(arguments[-4:], ["10000", "33554432", "32", "9"])
+
+    def test_single_file_dump_uses_one_worker(self):
+        arguments = self.capture_sbatch_arguments(tasks=32, file_count=1)
+        self.assertEqual(arguments[-4:], ["10000", "33554432", "1", "144"])
+
+    def test_explicit_worker_override_is_preserved(self):
+        arguments = self.capture_sbatch_arguments(
+            tasks=32, extra_config=["TOKENIZER_WORKERS=64"]
+        )
+        self.assertEqual(arguments[-4:], ["10000", "33554432", "64", "9"])
+
+    def test_negative_one_worker_override_keeps_auto_semantics(self):
+        arguments = self.capture_sbatch_arguments(
+            tasks=32, extra_config=["TOKENIZER_WORKERS=-1"]
+        )
+        self.assertEqual(arguments[-4:], ["10000", "33554432", "-1", "9"])
 
     def test_grouped_dump_size_uses_explicit_dataset_root(self):
         with tempfile.TemporaryDirectory() as temporary:

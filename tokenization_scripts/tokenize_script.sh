@@ -61,23 +61,8 @@ EXPECTED_GROUP_HEADS=${EXPECTED_GROUP_HEADS:-}
 MAX_DUMP_BYTES=${MAX_DUMP_BYTES:-150000000000}
 TOKENIZER_BATCH_SIZE=${TOKENIZER_BATCH_SIZE:-10000}
 TOKENIZER_BATCH_BYTES=${TOKENIZER_BATCH_BYTES:-33554432}
-TOKENIZER_WORKERS=${TOKENIZER_WORKERS:-$NUMBER_OF_DATATROVE_TASKS}
-TOKENIZER_EFFECTIVE_WORKERS=$TOKENIZER_WORKERS
-if (( TOKENIZER_EFFECTIVE_WORKERS < 1 )); then
-  TOKENIZER_EFFECTIVE_WORKERS=$NUMBER_OF_DATATROVE_TASKS
-fi
-if (( TOKENIZER_EFFECTIVE_WORKERS > NUMBER_OF_DATATROVE_TASKS )); then
-  TOKENIZER_EFFECTIVE_WORKERS=$NUMBER_OF_DATATROVE_TASKS
-fi
-if [ -z "${TOKENIZER_THREADS:-}" ]; then
-  TOKENIZER_THREADS=$((CPUS_PER_TASK / TOKENIZER_EFFECTIVE_WORKERS))
-  if (( TOKENIZER_THREADS > 144 )); then
-    TOKENIZER_THREADS=144
-  fi
-fi
-if (( TOKENIZER_THREADS < 1 )); then
-  TOKENIZER_THREADS=1
-fi
+TOKENIZER_WORKERS_OVERRIDE=${TOKENIZER_WORKERS:-}
+TOKENIZER_THREADS_OVERRIDE=${TOKENIZER_THREADS:-}
 MAX_SEQUENCE_TOKENS=${MAX_SEQUENCE_TOKENS:-0}
 REQUIRED_DATASET_MARKER=${REQUIRED_DATASET_MARKER:-}
 
@@ -164,6 +149,39 @@ while IFS= read -r paths_file; do
   fi
   output_folder=$output_folder/dump-$dump
   logging_dir=$logging_dir/dump-$dump
+  file_count=$(awk 'NF { count++ } END { print count + 0 }' "$paths_file")
+  if (( file_count < 1 )); then
+    echo "Error: paths file $paths_file contains no input files." >&2
+    exit 1
+  fi
+  tokenizer_tasks=$NUMBER_OF_DATATROVE_TASKS
+  if (( tokenizer_tasks > file_count )); then
+    tokenizer_tasks=$file_count
+  fi
+  tokenizer_workers=${TOKENIZER_WORKERS_OVERRIDE:-$tokenizer_tasks}
+  if [[ -z $TOKENIZER_WORKERS_OVERRIDE ]] && (( tokenizer_workers > 32 )); then
+    tokenizer_workers=32
+  fi
+  effective_workers=$tokenizer_workers
+  if (( effective_workers < 1 )); then
+    effective_workers=$tokenizer_tasks
+    if (( effective_workers > 32 )); then
+      effective_workers=32
+    fi
+  fi
+  if (( effective_workers > tokenizer_tasks )); then
+    effective_workers=$tokenizer_tasks
+  fi
+  tokenizer_threads=$TOKENIZER_THREADS_OVERRIDE
+  if [[ -z $tokenizer_threads ]]; then
+    tokenizer_threads=$((CPUS_PER_TASK / effective_workers))
+    if (( tokenizer_threads > 144 )); then
+      tokenizer_threads=144
+    fi
+  fi
+  if (( tokenizer_threads < 1 )); then
+    tokenizer_threads=1
+  fi
   job_name=tokenize-$DATASET_NAME$job_group-dump-$dump
   submit_args=(
     --partition="$PARTITION"
@@ -187,7 +205,7 @@ while IFS= read -r paths_file; do
   sbatch "${submit_args[@]}" "$SCRIPT_DIR/tokenize.sh" \
     "$CONFIG_FILE" "$output_folder" "$logging_dir" "$paths_file" \
     "$completed_folder" "$TOKENIZER_BATCH_SIZE" "$TOKENIZER_BATCH_BYTES" \
-    "$TOKENIZER_WORKERS" "$TOKENIZER_THREADS"
+    "$tokenizer_workers" "$tokenizer_threads"
 done < <(find "$dumps_root" -type f -name 'paths_file_*.txt' -print | sort)
 
 if [ "$found_dumps" -eq 0 ]; then

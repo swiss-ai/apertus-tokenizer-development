@@ -128,3 +128,9 @@ config_path=tokenization_scripts/configs_apertus_v2/FineMath-CommonCrawl-subset.
 The orchestrator accepts `--prepare-only` and `--dont_compute_dumps`. Arguments, config
 keys, validation and RCP use are documented in
 [`tokenization_scripts/README.md`](tokenization_scripts/README.md).
+
+The launcher caps each dump's tasks at its nonempty file count. Automatic worker
+selection uses at most 32 workers and divides the allocated CPUs among them, with
+up to 144 tokenizer threads per worker. A single-file dump therefore uses one
+worker. `TOKENIZER_WORKERS`, `TOKENIZER_THREADS`, `TOKENIZER_BATCH_BYTES` and
+`TOKENIZER_BATCH_SIZE` retain explicit overrides.
