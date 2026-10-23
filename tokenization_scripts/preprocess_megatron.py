@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 """
 python3 preprocess_megatron.py --tokenizer-name-or-path meta-llama/Meta-Llama-3-8B --output-folder tokenized_datasets/fineweb-edu --n-tasks 16 --dataset datasets/fineweb-edu/raw-dataset-link --paths-file datasets/fineweb-edu/dumps/paths_file_0.txt
 """
@@ -95,6 +96,11 @@ def get_args(argv=None):
         help="Column to preprocess from the Dataset. Default: text",
     )
     group.add_argument(
+        "--id-column",
+        default="id",
+        help="Column used as the document id. Default: id",
+    )
+    group.add_argument(
         "--rehydrate",
         type=str,
         default="False",
@@ -105,6 +111,27 @@ def get_args(argv=None):
         type=str,
         default=".parquet",
         help="File extension to use. e.g. .parquet or .jsonl.zst. Default: .parquet",
+    )
+    group.add_argument(
+        "--include-boolean-column",
+        default="",
+        help="Optional boolean metadata column deciding which rows are tokenized",
+    )
+    group.add_argument(
+        "--include-reason-column",
+        default="",
+        help="Reason metadata paired with --include-boolean-column",
+    )
+    group.add_argument(
+        "--included-reason",
+        default="included",
+        help="Exact reason value denoting an included row; may be empty",
+    )
+    group.add_argument(
+        "--max-sequence-tokens",
+        type=int,
+        default=0,
+        help="Fail before tokenization when an exact sequence exceeds this length; 0 disables the guard",
     )
 
     args = parser.parse_args(argv)
@@ -117,14 +144,17 @@ def main(args):
     # Check number of files > n tasks
     with open(args.paths_file, "rb") as f:
         number_of_files = sum(1 for _ in f)
-    if n_tasks > number_of_files:
-        n_tasks = number_of_files
+    n_tasks = min(n_tasks, number_of_files)
+    if n_tasks < 1:
+        raise ValueError("paths file contains no inputs")
+    n_workers = min(args.n_workers, n_tasks) if args.n_workers > 0 else args.n_workers
 
     if "jsonl" in args.extension:
         reader = JsonlReader(
             data_folder=args.dataset,
             paths_file=args.paths_file,
             text_key=args.column,
+            id_key=getattr(args, "id_column", "id"),
         )
         write_source_map = False
     else:
@@ -132,9 +162,32 @@ def main(args):
             data_folder=args.dataset,
             paths_file=args.paths_file,
             text_key=args.column,
+            id_key=getattr(args, "id_column", "id"),
         )
         write_source_map = True
 
+    include_column = getattr(args, "include_boolean_column", "")
+    if include_column and not write_source_map:
+        raise ValueError("row selection is only supported for Parquet inputs")
+    selection_steps = []
+    if include_column:
+        from data_pipeline_pretrain.pipeline.filters import MetadataInclusionFilter
+
+        reason_column = getattr(args, "include_reason_column", "")
+        if not reason_column:
+            raise ValueError(
+                "include boolean column requires an include reason column"
+            )
+        selection_steps.append(
+            MetadataInclusionFilter(
+                include_column=include_column,
+                reason_column=reason_column,
+                included_reason=getattr(args, "included_reason", "included"),
+            )
+        )
+    max_sequence_tokens = int(getattr(args, "max_sequence_tokens", 0) or 0)
+    if max_sequence_tokens < 0:
+        raise ValueError("max sequence tokens must be non-negative")
     do_rehydrate = args.rehydrate is not None and args.rehydrate.lower() in (
         "true",
         "1",
@@ -143,18 +196,24 @@ def main(args):
     preprocess_executor = LocalPipelineExecutor(
         pipeline=[
             reader,
+            *selection_steps,
             *([Rehydrater()] if do_rehydrate else []),
             MegatronDocumentTokenizer(
                 output_folder=args.output_folder,
                 tokenizer_name_or_path=args.tokenizer_name_or_path,
                 eos_token=args.eos_token,
-                batch_size=args.batch_size,
-                batch_bytes=args.batch_bytes,
                 provenance=write_source_map,
+                batch_size=getattr(
+                    args,
+                    "batch_size",
+                    getattr(args, "tokenizer_batch_size", 10000),
+                ),
+                batch_bytes=getattr(args, "batch_bytes", 32 * 1024**2),
+                max_sequence_tokens=max_sequence_tokens,
             ),
         ],
         tasks=n_tasks,
-        workers=args.n_workers,
+        workers=n_workers,
         start_method="spawn",
         logging_dir=args.logging_dir,
     )
