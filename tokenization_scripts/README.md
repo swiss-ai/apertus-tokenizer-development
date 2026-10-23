@@ -115,6 +115,31 @@ success the script writes `TOKENIZATION_MANIFEST.jsonl`, `CATEGORY_COUNTS.json`,
 `TOKENIZATION_RUN.json` and, last, a byte-identical `_SUCCESS.json` under
 `DATASET_OUTPUT_FOLDER_NAME`. It refuses to run if `_SUCCESS.json` already exists.
 
+### STEM configurations
+
+Each STEM dataset has a config named `<DATASET_NAME>.cfg` in `configs_apertus_v2/`
+and, except the two SYNTHETIC-1 identities, in `configs_apertus_v2_rcp/`. A pair differs
+only in `PATH_TO_RAW_DATASET` and `PATH_TO_OUTPUT_FOLDER`. `TOKEN_MAP_SOURCE_ROOT` is the
+Clariden processed root in both, so pass that root as `--durable-source-root` on RCP
+too.
+
+| `DATASET_NAME` | processing report from |
+|---|---|
+| `biocorpus-upstream-text-v1` | `pipelines/biocollection/main_2_validate.py` |
+| `thebiocollection-free-text-upstream-text-v1` | `pipelines/biocollection/main_2_validate.py` |
+| `thebiocollection-instruction-upstream-text-v1` | `pipelines/biocollection/main_2_validate.py` |
+| `superior-reasoning-apertus-inner-v1` | `pipelines/stem-reasoning-traces/main_4_validate.py` |
+| `synthetic-1-verified-apertus-inner-v2` | none yet, see below |
+| `synthetic-1-unverified-apertus-inner-v2` | none yet, see below |
+
+The SYNTHETIC-1 v2 trees on Clariden exclude the collections the licence review
+rejected. They were derived from the v1 run output by dropping those rows, and each
+tree records how in `DERIVATION.json` and `derivation/`: the filter, the licence
+policy (identical to the one in `pipelines/stem-reasoning-traces`), the source lookup
+and the kept and dropped row counts. They have no processing report for token-release
+validation. A `pipelines/stem-reasoning-traces` run, which applies the same licence
+filter, produces them with one. There is no config for the unfiltered v1 trees.
+
 ### `prepare_dumps.py`
 
 `tokenize_script.sh` calls it with these arguments.
@@ -342,3 +367,16 @@ acceptance follow separately.
 Earlier configs, including the historical `-boundary-safe-v1` derivatives, remain
 for reproduction of immutable delivered roots. Their pinned producer commits own
 those historical recipes; new releases use the ordinary corrected source pipeline.
+
+## SYNTHETIC-1 source reruns
+
+The paired `synthetic-1-{verified,unverified}-apertus-inner-v4` configs consume
+fresh complete output from the ordinary STEM producer in
+[data-pipeline-pretrain #56](https://github.com/swiss-ai/data-pipeline-pretrain/pull/56).
+They keep the pinned source admission and score split, use `source_key` IDs, and
+record the durable prepared root in maps. Earlier configs remain for reproduction.
+
+Use the standard preparation and per-dump tokenization entry points. Validate flat
+releases with the producer's complete processing report through the shared workflow
+in [#11](https://github.com/swiss-ai/apertus-tokenizer-development/pull/11) before
+sealing. Long-context reservation and sampler adoption follow acceptance.
