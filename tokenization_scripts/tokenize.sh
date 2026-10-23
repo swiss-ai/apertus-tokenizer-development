@@ -31,10 +31,21 @@ INCLUDED_REASON=${INCLUDED_REASON-included}
 TOKEN_MAP_SOURCE_ROOT=${TOKEN_MAP_SOURCE_ROOT:-}
 TOKENIZER_BATCH_SIZE=${6:-${TOKENIZER_BATCH_SIZE:-10000}}
 TOKENIZER_BATCH_BYTES=${7:-${TOKENIZER_BATCH_BYTES:-33554432}}
-TOKENIZER_WORKERS=${8:-${TOKENIZER_WORKERS:-$NUMBER_OF_DATATROVE_TASKS}}
+file_count=$(awk 'NF { count++ } END { print count + 0 }' "$paths_file")
+if (( file_count < 1 )); then
+  echo "Error: paths file $paths_file contains no input files." >&2
+  exit 1
+fi
+if (( NUMBER_OF_DATATROVE_TASKS > file_count )); then
+  NUMBER_OF_DATATROVE_TASKS=$file_count
+fi
+TOKENIZER_WORKERS=${8:-${TOKENIZER_WORKERS:--1}}
 TOKENIZER_EFFECTIVE_WORKERS=$TOKENIZER_WORKERS
 if (( TOKENIZER_EFFECTIVE_WORKERS < 1 )); then
   TOKENIZER_EFFECTIVE_WORKERS=$NUMBER_OF_DATATROVE_TASKS
+  if (( TOKENIZER_EFFECTIVE_WORKERS > 32 )); then
+    TOKENIZER_EFFECTIVE_WORKERS=32
+  fi
 fi
 if (( TOKENIZER_EFFECTIVE_WORKERS > NUMBER_OF_DATATROVE_TASKS )); then
   TOKENIZER_EFFECTIVE_WORKERS=$NUMBER_OF_DATATROVE_TASKS
@@ -113,8 +124,8 @@ bw=$(awk "BEGIN {print $dataset_total_size/$wc}")
 total_tokens_processed=$(($(du -shLcb "$output_folder"/*.bin | tail -n1 | sed -r 's/([^0-9]*([0-9]*)){1}.*/\2/') / 4))
 throughput=$(awk "BEGIN {print $total_tokens_processed/$wc}")
 
-echo "$SLURM_JOB_ID,$(hostname),$start_s,$end_s,$paths_file,$output_folder,$dataset_total_size,$processed_total_size,$NUMBER_OF_DATATROVE_TASKS,$wc,$bw,$total_tokens_processed,$throughput"
-echo "$SLURM_JOB_ID,$(hostname),$start_s,$end_s,$paths_file,$output_folder,$dataset_total_size,$processed_total_size,$NUMBER_OF_DATATROVE_TASKS,$wc,$bw,$total_tokens_processed,$throughput" >>"$CSV_RESULTS_FILE"
+echo "$SLURM_JOB_ID,$(hostname),$start_s,$end_s,$paths_file,$output_folder,$dataset_total_size,$processed_total_size,$TOKENIZER_EFFECTIVE_WORKERS,$wc,$bw,$total_tokens_processed,$throughput"
+echo "$SLURM_JOB_ID,$(hostname),$start_s,$end_s,$paths_file,$output_folder,$dataset_total_size,$processed_total_size,$TOKENIZER_EFFECTIVE_WORKERS,$wc,$bw,$total_tokens_processed,$throughput" >>"$CSV_RESULTS_FILE"
 
 sleep 10
 ls -lS "$output_folder"
