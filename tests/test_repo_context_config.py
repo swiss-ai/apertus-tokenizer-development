@@ -66,3 +66,24 @@ def test_worker_and_validator_resolve_tokenizer_from_script_directory():
     for script in ("tokenize.sh", "validate_tokenization.sh"):
         value = (ROOT / "tokenization_scripts" / script).read_text(encoding="utf-8")
         assert expected in value
+
+
+def test_8k_configs_enforce_the_new_bound_and_provenance_root():
+    configs = [
+        _assignments(ROOT / "tokenization_scripts" / directory / "stackv31-repo-context-8k-v2.cfg")
+        for directory in ("configs_apertus_v2", "configs_apertus_v2_rcp")
+    ]
+    for config in configs:
+        assert config["MAX_SEQUENCE_TOKENS"] == "8192"
+        assert config["DATASET_NAME"] == "stackv31-repo-context-8k-v2"
+        assert "8k" in config["PATH_TO_RAW_DATASET"]
+        assert "8k" in config["PATH_TO_OUTPUT_FOLDER"]
+        assert config["TOKEN_MAP_SOURCE_ROOT"] == "$PATH_TO_RAW_DATASET"
+        assert config["TOKENIZATION_VALIDATION_MODE"] == "strict"
+        assert config["REQUIRED_DATASET_MARKER"] == "$PATH_TO_RAW_DATASET/_SUCCESS"
+        assert config["DATASET_MANIFEST"] == "$PATH_TO_RAW_DATASET/examples_manifest.jsonl"
+        assert config["DUMP_GROUP_FIELDS"] == "category"
+        assert config["EXPECTED_GROUP_HEADS"] == "programming,markup,data,prose"
+    assert {key for key in configs[0] | configs[1] if configs[0].get(key) != configs[1].get(key)} == {
+        "PATH_TO_RAW_DATASET", "PATH_TO_OUTPUT_FOLDER"
+    }
