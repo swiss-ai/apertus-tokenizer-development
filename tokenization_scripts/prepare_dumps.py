@@ -10,9 +10,12 @@ from typing import Any
 
 
 def get_parquet_files(path_to_folder: str) -> list[str]:
+    # Relative dump paths are computed against this same resolved dataset root.
+    # Walking an alias would otherwise emit ../ paths into the token source maps.
+    root = Path(path_to_folder).expanduser().resolve()
     files = [
         os.path.join(dp, f)
-        for dp, _, fn in os.walk(os.path.expanduser(path_to_folder), followlinks=True)
+        for dp, _, fn in os.walk(root, followlinks=True)
         for f in fn
     ]
 

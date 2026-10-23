@@ -318,3 +318,27 @@ To recover, resubmit with `--dont_compute_dumps`: only the path manifests still 
 `dumps/` are submitted. Do not regenerate dumps while workers from the previous
 inventory are running. Run validation only after every path manifest has moved to
 `completed-dumps/`.
+
+## Code source reruns
+
+Paired configs add six v3 identities and OpenHands v4 for fresh processing of the
+pinned unredacted canonical sources through the standard code pipeline. RCP reads
+`/mloscratch/<release>` and writes `/mloscratch/<release>_apertus_v2`; both site
+configs record the durable Clariden `datasets/swiss-ai/code/<release>` path in
+source maps. They use 256 dumps, capped at the source-file count, one task per dump
+and 16 tokenizer threads on RCP.
+
+First run the code producer's `main_3_validate.py` with `--dataset-name <release>`
+and save its processing report. Prepare and tokenize every output row using the
+ordinary entry points above. The shared flat-delivery validator
+`validate_stem_direct.py` accepts that report and checks complete source coverage,
+completed manifests, full payload hashes, source coordinates and BOS/EOS collisions
+before sealing. Pass `--dataset`, `--durable-source-root`, `--metadata-root`,
+`--output-folder`, `--processing-report`, `--tokenizer`, `--config`,
+`--dataset-name`, `--expected-dumps`, `--implementation-commit`,
+`--validator-commit` and `--workers`. Long-context reservation and destination
+acceptance follow separately.
+
+Earlier configs, including the historical `-boundary-safe-v1` derivatives, remain
+for reproduction of immutable delivered roots. Their pinned producer commits own
+those historical recipes; new releases use the ordinary corrected source pipeline.
