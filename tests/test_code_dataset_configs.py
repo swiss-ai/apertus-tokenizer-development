@@ -142,3 +142,44 @@ def test_boundary_safe_derivatives_have_complete_paired_paths():
         assert rcp["ID_COLUMN"] == "source_key"
         assert rcp["TOKENIZER_THREADS"] == "16"
         assert rcp["NUMBER_OF_DATATROVE_TASKS"] == "1"
+
+
+def test_pii_replacements_pair_complete_inputs_and_durable_maps():
+    replacements = (
+        "coderforge-preview-marin-tool-v4",
+        "davinci-dev-ctx-marin-markdown-v4",
+        "davinci-dev-env-marin-tool-v4",
+        "nemotron-terminal-corpus-marin-role-v4",
+        "swe-hero-openhands-marin-tool-v4",
+        "swe-rebench-openhands-marin-tool-v5",
+        "swe-zero-12m-trajectories-marin-role-v4",
+        "synthetic-1-unverified-apertus-inner-v5",
+        "synthetic-1-verified-apertus-inner-v5",
+    )
+    for release in replacements:
+        clariden = _assignments(CLARIDEN_CONFIGS / f"{release}.cfg")
+        rcp = _assignments(RCP_CONFIGS / f"{release}.cfg")
+        assert {key for key in clariden | rcp if clariden.get(key) != rcp.get(key)} == {
+            "PATH_TO_RAW_DATASET",
+            "PATH_TO_OUTPUT_FOLDER",
+            "TOKENIZATION_LAUNCH_BACKEND",
+        }
+        assert clariden["DATASET_NAME"] == rcp["DATASET_NAME"] == release
+        root = "/capstor/store/cscs/swissai/infra01/datasets"
+        if not release.startswith("synthetic-1-"):
+            root += "/swiss-ai/code"
+        durable = f"{root}/{release}"
+        assert clariden["PATH_TO_RAW_DATASET"] == durable
+        assert (
+            clariden["TOKEN_MAP_SOURCE_ROOT"] == rcp["TOKEN_MAP_SOURCE_ROOT"] == durable
+        )
+        assert rcp["PATH_TO_RAW_DATASET"] == f"/mloscratch/{release}"
+        assert rcp["TOKENIZATION_LAUNCH_BACKEND"] == "rcp"
+        assert (
+            clariden["COLUMN_KEY"] == "text" and clariden["ID_COLUMN"] == "source_key"
+        )
+        assert clariden["GPUS"] == "0" and clariden["TOKENIZER_WORKERS"] == "1"
+        assert int(clariden["TOKENIZER_THREADS"]) <= int(clariden["CPUS_PER_TASK"])
+        assert int(clariden["TOKENIZER_BATCH_BYTES"]) > 0
+        assert clariden["REHYDRATE_FLAG"] == "False"
+        assert clariden["PATH_TO_PREPROCESSING_METADATA"] == "$PATH_TO_OUTPUT_FOLDER"
