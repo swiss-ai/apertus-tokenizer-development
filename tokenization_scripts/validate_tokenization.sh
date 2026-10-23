@@ -19,6 +19,7 @@ validator_commit=$(git -C "$SCRIPT_DIR/.." rev-parse HEAD)
 output_folder=${DATASET_OUTPUT_FOLDER_NAME:-$PATH_TO_OUTPUT_FOLDER/$TOKENIZER_NAME/$DATASET_NAME}
 validation_workers=${TOKENIZATION_VALIDATION_WORKERS:-8}
 validation_mode=${TOKENIZATION_VALIDATION_MODE:-strict}
+validation_max_sequence_tokens=${TOKENIZATION_VALIDATION_MAX_SEQUENCE_TOKENS:-$MAX_SEQUENCE_TOKENS}
 
 python3 "$SCRIPT_DIR/validate_megatron.py" \
   --dataset "$PATH_TO_RAW_DATASET" \
@@ -34,6 +35,6 @@ python3 "$SCRIPT_DIR/validate_megatron.py" \
   --text-column "$COLUMN_KEY" \
   --id-column "${ID_COLUMN:-id}" \
   --expected-categories "$EXPECTED_GROUP_HEADS" \
-  --max-sequence-tokens "$MAX_SEQUENCE_TOKENS" \
+  --max-sequence-tokens "$validation_max_sequence_tokens" \
   --validation-mode "$validation_mode" \
   --workers "$validation_workers"
