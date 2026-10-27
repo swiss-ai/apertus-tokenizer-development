@@ -6,7 +6,9 @@ against the current production tokenizer **Apertus v1** and OpenAI's **o200k**
 (GPT-4o) as an external 200k reference; o200k has its own pretokenizer and no NFC
 normalizer, inherent to the comparison. See [README.md](README.md) for the build
 recipes and usage; intrinsic metrics here were computed with the SwissAI TokEval
-library.
+library. FLORES60 and FLORES200 in this document are the sets that
+DEVELOPMENT_RECORD.md calls broad (60 languages, dev split) and full (205
+languages, devtest split).
 
 The four candidates and their data character:
 
@@ -21,11 +23,13 @@ The four candidates and their data character:
 
 I recommend **`preliminary_mul_200k`** as the primary candidate. It compresses
 both the high-resource European languages and the low-resource tail more than the
-131k candidates, which each gain on one and lose on the other. It has the highest
+131k candidates, each of which compresses one of the two more than Apertus v1 and
+the other less. It has the highest
 European compression of the set (EU average 4.245 bytes/token on FLORES, against
 3.865 for Apertus v1, +9.8%), the highest FLORES sentences-per-token (0.0239),
-and the smallest worst-language penalty: the worst-served language needs 3.61x as
-many tokens as English on the same text, against 14.70x for Apertus v1. English
+and the smallest worst-language factor: the language with the highest token count
+uses 3.61 times as many tokens as English on the same FLORES text, against 14.70
+times for Apertus v1. English
 compression is close to the other candidates (FineWeb-Edu 4.510 bytes/token,
 1.8% below Apertus v1). It compresses German more than Apertus v1, and French
 about the same.
@@ -121,9 +125,9 @@ tokenizer, with bars for 15 languages from the European head to the low-resource
 tail, spanning Latin, Cyrillic, Arabic, CJK, Indic, Thai, Tibetan, and the
 Turkish/Swahili Latin pair. It uses FLORES sentences per token (parallel
 sentences, so comparable across scripts; the chars/token table above is not).
-Apertus v1 and o200k compress European text well but fragment the low-resource
-tail: Tibetan is 0.003 and 0.005 sentences per token, against about 0.020 for
-the candidates. `preliminary_mul_200k` is the most even across the set.
+Apertus v1 and o200k compress European text well but split the low-resource
+tail into many tokens: Tibetan is 0.003 and 0.005 sentences per token, against
+about 0.020 for the candidates. `preliminary_mul_200k` is the most even across the set.
 
 Both plots are produced by `make_per_language_plots.py` from the FLORES
 parallel files (997 sentences per language, `add_special_tokens=False`).
@@ -197,8 +201,8 @@ of the times it is built (survival below 0.1). A scaffold token is one the
 tokenizer builds mostly as an intermediate step toward a larger token, not as an
 output on its own. In `preliminary_enh`, for example, `ould` is emitted alone 9
 times but built 7,253 times, almost always inside ` would`. Scaffold tokens are
-structurally needed to build the tokens that do surface; they are not removable
-waste (distinct from the junk and dead-vocabulary metrics).
+needed to build the tokens that are emitted on their own; they are not removable
+(distinct from the junk and dead-vocabulary metrics).
 
 <!-- BEGIN TABLE: vocab-usage -->
 | Tokenizer | Merge tokens | Active % | Rare % | Uncommon % | Unseen % | Scaffold % | Scaffold count |
@@ -246,10 +250,10 @@ The candidates align to AST boundaries more often than Apertus v1 and o200k
 (0.68 against 0.46 to 0.49), on the real StarCoder sample. The operator-isolation
 column separates them too, but that separation is a property of prose: measured
 on code, where operators are usually space-delimited, the same metric puts the
-families much closer (Apertus 0.40, candidates 0.51 to 0.52, a gap of about 0.12
-against the 0.62 prose gap). So the code-structure claim that holds here is the
-AST alignment; operator isolation reflects the same regex difference (the clean
-regex splits punctuation off adjacent characters) but is not by itself a
+families much closer (Apertus 0.40, candidates 0.51 to 0.52, a difference of
+about 0.12 against 0.62 on prose). So the code-structure claim that holds here is
+the AST alignment; operator isolation comes from the same regex difference (the
+clean regex splits punctuation off adjacent characters) but is not by itself a
 code-corpus measurement. One caution on the metric: isolation can be pushed to
 1.0 by shattering compound operators, which a pure-punctuation regex does
 (splitting `>=` into `>` `=`), so higher is not always better.
@@ -286,8 +290,7 @@ characters).
 `preliminary_mul_200k` was the last one still shipping with the flag off, and it
 was turned on 2026-07-19. Its encode throughput went from 3.03 to 3.34 MB/s, a
 1.10x gain, which brings it level with the 131k candidates instead of last. The
-previous file is kept alongside it as
-`tokenizer.json.bak_ignore_merges_false_2026-07-19`.
+previous file (`ignore_merges=false`) is retained outside the repository.
 
 The candidates encode at 3.25 to 3.34 MB/s against Apertus v1's 3.66. The
 remaining difference from Apertus v1 is the pretokenizer regex, which does more
@@ -313,7 +316,7 @@ output tables) and the compute-optimal training-token budget. Its recipe is
 otherwise the same family as `preliminary_euh` (same `plus2` pretokenizer and
 Fr/De-boosted `consv2` data). The full per-tokenizer panel is in DEVELOPMENT_RECORD.md.
 
-Protocol: nanochat GPT, depth-24 (~1B parameters), muP. Two training regimes per
+Protocol: nanochat GPT, depth-24 (about 1B parameters), muP. Two training runs per
 tokenizer: a standard multilingual mix to about 10B tokens, and a from-scratch 20B
 math+code mix (`mathcode-scratch`). Evaluations: validation BPB, downstream LM
 FLORES BPB on the 31 training languages (BPB is normalized per byte, so it
@@ -354,14 +357,14 @@ of `preliminary_euh` (p_BH = 0.039), but not distinguishable from
 `preliminary_enh` or `preliminary_mul` (p_BH = 0.889 and 0.504). `preliminary_mul`
 is highest on MC-math (0.285, single run, no CI). At this model size and token
 budget there is no consistent downstream separation strong enough to override
-the intrinsic compression profile, which is what the recommendation rests on.
+the intrinsic compression profile, which is the basis of the recommendation.
 
-## Takeaways
+## Candidate summaries
 
 - **`preliminary_mul_200k`** (recommended): with 53% more vocabulary it
   compresses English about as much as the others (FineWeb-Edu 4.510 bytes/token)
   and has the highest EU compression (EU-avg 4.129, German 4.363, French 4.295
-  chars/token) and the smallest worst-language penalty (3.61x), while keeping the
+  chars/token) and the smallest worst-language factor (3.61 times), while keeping the
   low-resource tail (Indic 2.759, Mandarin 1.149, Tibetan 2.518 chars/token). It
   compresses both the high-resource and low-resource languages more than the 131k
   candidates do. The larger vocabulary means a larger embedding and output table (200064 vs 131072).
@@ -378,7 +381,7 @@ the intrinsic compression profile, which is what the recommendation rests on.
   multilingual and fairness gains. Indic and Chinese are lower than
   `preliminary_mul`. EU languages are compressed less than under Apertus v1.
 - **`preliminary_euh`** (131k): highest EU compression of the 131k candidates
-  (EU-avg 3.937; German +2.2%, French about the same at −2.2%). It allocates less vocabulary to
-  Chinese, so Mandarin drops to 0.917, **below Apertus v1's 1.108 (−17%)**. By Gini it is
+  (EU-avg 3.937; German +2.2%, French about the same at −2.2%). It has fewer merges for
+  Chinese, so Mandarin drops to 0.917 chars/token, **below Apertus v1's 1.108 (−17%)**. By Gini it is
   the least fair of the four candidates. Appropriate if European compression is
   the priority and Chinese can be deprioritized.

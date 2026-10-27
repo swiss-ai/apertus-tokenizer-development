@@ -1,6 +1,6 @@
 # Training and reproduction
 
-How the four `preliminary_*` tokenizers in this repository were trained, with enough detail to reproduce them and verify the result against the deployed files. For what the tokenizers are and how to use them, see [README.md](README.md). For the design rationale (pretokenization, algorithm, special tokens), see [apertus_tokenizer_design.md](apertus_tokenizer_design.md).
+How the four `preliminary_*` tokenizers in this repository were trained, with enough detail to reproduce them and verify the result against the deployed files. For what the tokenizers are and how to use them, see [README.md](README.md). For the design rationale (pretokenization, algorithm, special tokens), see [DESIGN.md](DESIGN.md).
 
 The exact recipe artifacts are bundled under [`training/`](training/): the four config files, the training driver, the data loader, the pretokenizer regexes, and the special-token spec. The Rust trainer lives in a separate repository (see Trainer). The training data is our cluster's copies of public datasets, so reproducing off-cluster requires repointing the dataset paths (see Data).
 
@@ -37,7 +37,7 @@ The driver `training/train_tokenizer.py` builds the normalizer, pretokenizer, an
 
 ## 3. Pretokenizer and normalizer
 
-NFC normalization, then a byte-level pretokenizer regex. `preliminary_mul` uses `clean_multi_plus3_repcap8`; the other three use `clean_multi_plus2_repcap8`. The `repcap8` guard caps a standalone run of 8 or more identical characters at 8. The definitions are in `training/pretokenizer_regexes.py`. The rationale is in [apertus_tokenizer_design.md](apertus_tokenizer_design.md).
+NFC normalization, then a byte-level pretokenizer regex. `preliminary_mul` uses `clean_multi_plus3_repcap8`; the other three use `clean_multi_plus2_repcap8`. The `repcap8` guard caps a standalone run of 8 or more identical characters at 8. The definitions are in `training/pretokenizer_regexes.py`. The rationale is in [DESIGN.md](DESIGN.md).
 
 The guard differs in one detail across the shipped files. In `preliminary_enh`, `preliminary_euh`, and `preliminary_mul_200k` it excludes digit runs (`[^\s\p{N}]`), and the regex in each shipped `tokenizer.json` is byte-identical to the bundled definition. `preliminary_mul` was trained with an earlier form of the guard that does not exclude digit runs (`[^\s]`), so in that tokenizer a run of 8 or more identical digits forms an 8-character pre-token, and 12 multi-digit tokens are in its vocabulary (`00000000`, `99999999`, and the 4- and 2-character runs of 0, 1, 3, 6, 9). The bundled `clean_multi_plus3_repcap8` definition is the digit-excluding form, so retraining the `preliminary_mul` variant does not reproduce the shipped file byte-for-byte; the exact trained regex is embedded in `preliminary_mul/tokenizer.json`.
 

@@ -14,7 +14,7 @@ archive/
 # panels (JSON + plots); the top-level report_flores60/ and family_plots/ are the
 # older decoupled static-SVG copies the docs reference, and are separate.
 results/
-
+configs/
 # Per-language plots are tracked as PNG only; the SVG copies stay local (regenerable
 # from make_per_language_plots.py). This does not affect the tracked report_*/ SVGs.
 per_language_*.svg
@@ -22,3 +22,11 @@ per_language_*.svg
 # Python bytecode
 __pycache__/
 *.pyc
+
+# Session and drafting material, not for release
+SESSION_STATUS.md
+BLOG_DRAFT.md
+blog_revision_2026-09/
+.claude/
+# Pre-flip backup of the 200k tokenizer (ignore_merges=false, 2026-07-19); redundant with the identity check
+preliminary_mul_200k/tokenizer.json.bak_*

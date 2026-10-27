@@ -2,14 +2,17 @@
 
 Preliminary Apertus v2 tokenizers and their Hugging Face config files.
 
-Documentation:
+Documentation, by what you want to do:
 
-- [REPORT_focus_candidates.md](REPORT_focus_candidates.md): the four-way comparison against Apertus v1 and o200k, with the recommendation.
-- [DEVELOPMENT_RECORD.md](DEVELOPMENT_RECORD.md): the development record (design ablations, downstream-LM evidence, reference-tokenizer comparison, production safety).
-- [TRAINING.md](TRAINING.md): training recipes, data, and reproduction steps.
-- [apertus_tokenizer_design.md](apertus_tokenizer_design.md): pretokenization and special-token design rationale.
+- Use a tokenizer: this file (contents, special tokens, encode behavior, usage examples).
+- Choose between the four: [CANDIDATES.md](CANDIDATES.md), the comparison against Apertus v1 and o200k, with the recommendation.
+- Understand the design: [DESIGN.md](DESIGN.md), the pretokenization and special-token rationale.
+- Check the evidence: [DEVELOPMENT_RECORD.md](DEVELOPMENT_RECORD.md), the design ablations, downstream-LM results, reference-tokenizer comparison, and production-safety checks.
+- Reproduce a tokenizer: [TRAINING.md](TRAINING.md), the recipes, data, and verification steps.
 
-**Recommended candidate: `preliminary_mul_200k`** (200064 vocabulary, 128-aligned). It is European-focused with substantial broad multilingual coverage: it has the highest European compression of the tokenizers here, and it also compresses the low-resource languages more than the 131k tokenizers, which each improve one and worsen the other. It has the smallest worst-language penalty of the set. The larger vocabulary means a 53% larger embedding and output table than the 131072-vocabulary options (Apertus v1 and the other three candidates). Use one of the 131k candidates instead if you need to match Apertus v1's vocabulary size.
+The `tokenizer.json` files are stored with git-lfs. A clone made without git-lfs installed contains pointer files in their place, and the usage examples below fail to load them; install git-lfs and run `git lfs pull`.
+
+**Recommended candidate: `preliminary_mul_200k`** (200064 vocabulary, 128-aligned). It is European-focused with substantial broad multilingual coverage: it has the highest European compression of the tokenizers here, and it also compresses the low-resource languages more than the 131k tokenizers, each of which compresses one of the two more than Apertus v1 and the other less. It has the smallest worst-language factor of the set (the token count of the language with the most tokens, relative to English). The larger vocabulary means a 53% larger embedding and output table than the 131072-vocabulary options (Apertus v1 and the other three candidates). Use one of the 131k candidates instead if you need to match Apertus v1's vocabulary size.
 
 > **Warning: template processing differs from Apertus v1.** With `add_special_tokens=True`, the post-processor wraps a single sequence as `<s> text </s>`, adding both BOS and EOS. Apertus v1 prepends only `<s>` and adds no `</s>`. This is a deliberate change requested by the engineering team. Configure training, packing, and any chat template accordingly. See the "Default encode behavior and caveats" section below.
 
@@ -17,12 +20,12 @@ Documentation:
 
 | tokenizer | vocab | post-processor | character |
 |---|---|---|---|
-| `preliminary_mul_200k/` | 200064 | yes (`<s> … </s>`) | **Recommended.** European-focused with broad multilingual coverage: the highest European compression of the set and the smallest worst-language penalty, and it compresses the low-resource languages more than the 131k tokenizers. |
+| `preliminary_mul_200k/` | 200064 | yes (`<s> … </s>`) | **Recommended.** European-focused with broad multilingual coverage: the highest European compression of the set and the smallest worst-language factor, and it compresses the low-resource languages more than the 131k tokenizers. |
 | `preliminary_mul/` | 131072 | yes | Most balanced and fairest of the four. Highest compression on Indic languages, Chinese, and the low-resource tail among the 131k tokenizers; compresses English the least. |
 | `preliminary_enh/` | 131072 | yes | Highest English compression at 131k, trained with more English data, while keeping most of the multilingual and fairness gains. |
 | `preliminary_euh/` | 131072 | yes | Highest European compression at 131k. Trained with more French and German data and less Chinese data; compresses Chinese less than Apertus v1 and is the least fair of the four. |
 
-The numbers behind these characterizations are in [REPORT_focus_candidates.md](REPORT_focus_candidates.md).
+The numbers behind these characterizations are in [CANDIDATES.md](CANDIDATES.md).
 
 Build recipes (variant keys in `train_tokenizer.py`):
 - `preliminary_enh`: `pa_bpe_nfc_clean_multi_plus2_repcap8_capped_hybrid_window_tuned_consv2_engfull_eu3_gm110k_v131k_sp124_eng5g` + BOS/EOS post-processor

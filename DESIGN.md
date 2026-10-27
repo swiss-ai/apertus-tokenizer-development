@@ -1,10 +1,10 @@
 # Tokenizer design choices
 
-This document collects the tokenizer-design decisions for the Apertus successor work.
-Pretokenization decisions are covered first (the main content), followed by a shorter
-section on the algorithmic decisions (parity-aware training, SuperBPE, vocabulary size); the
-full algorithm comparison is in DEVELOPMENT_RECORD.md. The added-token / special-token addenda for the
-Apertus v1 tokenizer are kept at the end as a reference.
+This document records the pretokenization design decisions behind the Apertus v2 tokenizers,
+with the regexes and the per-language measurements that motivated each extension. The training
+data, the training algorithms, and their comparison are in DEVELOPMENT_RECORD.md and TRAINING.md;
+a short section near the end names what is where. The special tokens of the v2 tokenizers, and the
+Apertus v1 layout they replace, are in the final section.
 
 ## Pretokenization
 
@@ -31,7 +31,7 @@ Apertus v1 tokenizer are kept at the end as a reference.
 
 **Pretokenization** is a preprocessing step that happens *before* tokenizer training (and before text encoding at inference time). It splits raw text into coarse chunks called **pre-tokens** using a regex. Tokenization algorithms (including BPE) then operate independently within each pre-token, e.g., BPE merges can never cross pre-token boundaries. This is the mechanism that controls what can become a token.
 
-Why not just let algorithms run on raw text with no pre-splitting? a) Algorithms like BPE are greedy and frequency-driven, with no knowledge about the text they're operating. Without pretokenization boundaries, we get tokens that split ASCII characters (if we're using a byte-level tokenizer), cross multiple whitespace or sentence boundaries, and generally block other more sensible options that would lead to better compression globally. Pretokenization is a place to add inductive biases, and as with most inductive biases it can be harmful as much as helpful. b) Algorithm efficiency: without chunking text into pre-tokens, you would have to store the entire corpus in memory instead of just sufficient statistics.
+Why not just let algorithms run on raw text with no pre-splitting? a) Algorithms like BPE are greedy and select merges by frequency alone, with no knowledge of the text they operate on. Without pretokenization boundaries, we get tokens that split ASCII characters (if we're using a byte-level tokenizer), cross multiple whitespace or sentence boundaries, and generally block other more sensible options that would lead to better compression globally. Pretokenization is a place to add inductive biases, and as with most inductive biases it can be harmful as much as helpful. b) Algorithm efficiency: without chunking text into pre-tokens, you would have to store the entire corpus in memory instead of just sufficient statistics.
 
 #### Concrete example of why pretokenization helps
 
@@ -47,7 +47,7 @@ Suppose BPE is trained on the following corpus with no pretokenization applied (
 | `i n ␣ n e e d` | 200 |
 | `o n ␣ n o w` | 150 |
 
-Without pretokenization, BPE sees `n␣n` as a high-frequency bigram (350 occurrences across "in need" and "on now"). Meanwhile, the within-word pairs like `ne` (across all "new/newer/newest" = 180) and `se` (across "sew/sewn" = 80) are less frequent.
+Without pretokenization, `n␣n` is a high-frequency bigram (350 occurrences across "in need" and "on now"). Meanwhile, the within-word pairs like `ne` (across all "new/newer/newest" = 180) and `se` (across "sew/sewn" = 80) are less frequent.
 
 ##### Cross-Boundary Merges
 
@@ -59,18 +59,18 @@ Now `n␣n` is a single token.
 
 ##### The Blocking Effect
 
-**On "new":** When the corpus contains `i n ␣ n e w`, BPE segments it as `i [n␣n] e w`. The cross-boundary token has consumed the initial `n` of "new." The `n` is no longer available to merge with `e` to eventually form useful tokens like `ne`, `new`, or `newer`. We can't form a token that utilizes the word's morphological structure.
+**On "new":** When the corpus contains `i n ␣ n e w`, BPE segments it as `i [n␣n] e w`. The cross-boundary token contains the initial `n` of "new." The `n` is no longer available to merge with `e` to eventually form useful tokens like `ne`, `new`, or `newer`. We can't form a token that utilizes the word's morphological structure.
 
-**On "now":** Similarly, `o n ␣ n o w` becomes `o [n␣n] o w`, tearing `n` away from `ow`.
+**On "now":** Similarly, `o n ␣ n o w` becomes `o [n␣n] o w`, separating `n` from `ow`.
 
 ##### With Pretokenization
 
-With pretokenization (splitting at whitespace first), BPE would never see `n␣n` as a candidate. Instead, it processes each word independently and learns useful merges like `n` + `e` → `ne`, then `ne` + `w` → `new`, tokens that respect word boundaries and capture morphological structure.
+With pretokenization (splitting at whitespace first), `n␣n` is never a candidate pair. BPE processes each word independently and learns useful merges like `n` + `e` → `ne`, then `ne` + `w` → `new`, tokens that stay within word boundaries and follow the morphology.
 
 
 ### How pretokenization regex works in practice
 
-Pretokenization is often done simply with regex, applied left-to-right. Matched substrings become isolated pre-tokens; unmatched text between matches also becomes pre-tokens. If you use a byte-level tokenizer, then after regex splitting, byte-level encoding converts each pre-token into a sequence of bytes, using a character mapping. Space and newlines are often given their own special symbols, e.g., `Ġ` and `Ċ`. As a concrete example, consider the text `the cat sat`. If we use a word-matching pretokenization pattern, the regex matches `the`, ` cat`, and ` sat` as separate pre-tokens (the leading space is captured as part of each word by the pattern's optional prefix). BPE sees three independent byte sequences: `the`, `Ġcat`, `Ġsat`. It can learn merges like `c` + `a` → `ca` within `Ġcat`, but can never learn a merge that bridges from `the` into `Ġcat`.
+Pretokenization is often done simply with regex, applied left-to-right. Matched substrings become isolated pre-tokens; unmatched text between matches also becomes pre-tokens. If you use a byte-level tokenizer, then after regex splitting, byte-level encoding converts each pre-token into a sequence of bytes, using a character mapping. Space and newlines are often given their own special symbols, e.g., `Ġ` and `Ċ`. As a concrete example, consider the text `the cat sat`. If we use a word-matching pretokenization pattern, the regex matches `the`, ` cat`, and ` sat` as separate pre-tokens (the leading space is captured as part of each word by the pattern's optional prefix). BPE receives three independent byte sequences: `the`, `Ġcat`, `Ġsat`. It can learn merges like `c` + `a` → `ca` within `Ġcat`, but can never learn a merge that bridges from `the` into `Ġcat`.
 
 Note: If we use SuperBPE, stage 1 and stage 2 use different regexes. Stage 1 might define pretokens according to word boundaries, while stage 2 removes this criterion for pretoken splitting, so "superword" tokens can form across spaces. 
 
@@ -146,7 +146,7 @@ getHTTPResponse → getHTTPResponse
 - Case splitting also provides cross-script boundary splitting as a side effect: `использоватьPython` (Cyrillic + Latin) splits as `использовать` | `Python` because lowercase Cyrillic transitions to uppercase Latin.
 - The split logic is imperfect: `getHTTPResponse` produces `get` | `HTTPResponse`, not `get` | `HTTP` | `Response`.
 
-**Current choice:** split (Option A). The subword-sharing benefit for code is substantial, the cost for natural language is arguably minor (`Mc` | `Donald` is a rare annoyance), and cross-script splitting is a useful bonus for multilingual text. If using SuperBPE, splitting also gives stage 2 more to work with. Stage 1 learns good subword components, and stage 2 can re-merge them into cross-word tokens where useful.
+**Current choice:** split (Option A). The subword-sharing benefit for code is substantial, the cost for natural language is small (`Mc` | `Donald` is a rare case), and cross-script splitting is a useful bonus for multilingual text. If using SuperBPE, splitting also gives stage 2 more to work with. Stage 1 learns good subword components, and stage 2 can re-merge them into cross-word tokens where useful.
 
 
 #### Decision 2: Digit grouping
@@ -161,7 +161,7 @@ getHTTPResponse → getHTTPResponse
 3.14159 → 3 | . | 1 | 4 | 1 | 5 | 9
 ```
 
-**Option B: Groups of 1–3 `\p{N}{1,3}` (GPT-4):** Digits are pre-grouped into chunks of up to 3. BPE cannot form tokens longer than 3 digits.
+**Option B: Groups of 1 to 3 digits, `\p{N}{1,3}` (GPT-4):** Digits are pre-grouped into chunks of up to 3. BPE cannot form tokens longer than 3 digits.
 
 ```
 768     → 768              (1 pre-token)
@@ -172,7 +172,7 @@ getHTTPResponse → getHTTPResponse
 **Trade-offs:**
 
 - With single-digit, every digit is an isolated single-byte pre-token. Since BPE merges can never cross pre-token boundaries, **multi-digit tokens are impossible**: every digit is permanently its own token. Numbers are always represented as sequences of individual digit tokens: `768` is always 3 tokens.
-- With grouped splitting, `768` is a single pre-token containing three bytes. BPE can learn internal merges (`7` + `6` → `76`, then `76` + `8` → `768`). This means a significant portion of the merges can go to multi-digit tokens, and we're not guaranteed that all are present. E.g., `768` could become a token and `68` might not, implying a larger number would be encoded by a single token while a smaller one needs 2 tokens. 
+- With grouped splitting, `768` is a single pre-token containing three bytes. BPE can learn internal merges (`7` + `6` → `76`, then `76` + `8` → `768`). This means a significant portion of the merges can go to multi-digit tokens, and not all of them are present. For example, `768` could become a token while `68` does not, so a larger number is encoded as a single token while a smaller one takes 2 tokens.
 - Grouped splitting introduces arbitrary boundaries: `2025` → `202` | `5`, `123456` → `123` | `456`. These don't correspond to meaningful structure in the number. BPE can't reassemble across the group boundary.
 - Single-digit is simpler and deterministic, and uses no merges on digits. But it means the model must always process numbers digit-by-digit, which is inefficient for code and math where multi-digit constants are frequent.
 
@@ -221,8 +221,8 @@ With Options A/B, punctuation immediately followed by a newline gets fused into 
 **Trade-offs:**
 
 - Fusing `):\n` is efficient for Python where this pattern is extremely common, so BPE can learn it as a single token.
-- However, it means the newline is absorbed by the punctuation, so it's unavailable as a standalone `Ċ` boundary token. `;\n\n` becomes a single pre-token, losing the ability to represent blank lines independently.
-- Without trailing newlines (Option C), the punctuation and newline patterns never compete.
+- However, the newline is then part of the punctuation pre-token, so it's unavailable as a standalone `Ċ` boundary token. `;\n\n` becomes a single pre-token, losing the ability to represent blank lines independently.
+- Without trailing newlines (Option C), the punctuation and newline patterns never match the same character.
 - The `/` in Option A is rarely relevant in practice (slashes adjacent to letters are captured by word prefixes instead).
 
 
@@ -259,11 +259,11 @@ bounded to 16 characters per pre-token; longer runs are split into ≤16-char pi
 
 **Trade-offs:**
 - Uncapped lets BPE use vocabulary slots on long **decorative-junk** tokens (`----`, `====`,
-  `####`, long space runs, separator bars) which appear in scraped/markdown data and waste slots that
+  `####`, long space runs, separator bars) which appear in scraped/markdown data and occupy slots that
   could go to language content. These tokens are almost never useful at inference.
 - Capping at 16 removes that failure mode: no run-token can exceed 16 chars, so BPE cannot build a
   64-char rule of dashes. The cap is **byte-identical to uncapped on normal text/code/math** (real runs
-  of punctuation or indentation are short); it only bites on pathological decorative runs.
+  of punctuation or indentation are short); it only applies to decorative runs of 17 or more characters.
 - 16 (rather than a smaller cap) is chosen so common legitimate runs stay intact: `../../../` path
   segments, `***` / `---` markdown, LaTeX markup like `\\\\`, and up-to-16-space indentation are
   unaffected.
@@ -277,7 +277,7 @@ uncapped clean variant is otherwise identical (the caps revert to `+`).
 
 **If using SuperBPE, what should the stage 2 regex look like?**
 
-The goal of stage 2 is to remove some of the pretoken boundary patterns so BPE can learn "superword" merges across pre-tokens (e.g., if we were to move whitespace as a regex criterion that we split on, the we could get tokens like `theĠcat`, `defĠmain`). If we keep the pretokenization regex the same as in stage 1, then  The constraint is: **stage 2 must never introduce _new_ pre-token boundaries, i.e., a pre-token where stage 1 had none**: otherwise stage 1 merges can't replay.
+The goal of stage 2 is to remove some of the pretoken boundary patterns so BPE can learn "superword" merges across pre-tokens (for example, if whitespace were removed from the split criteria, tokens like `theĠcat` and `defĠmain` could form). If the stage 2 regex were the same as stage 1, no new merges could form. The constraint is: **stage 2 must never introduce _new_ pre-token boundaries, i.e., a boundary where stage 1 had none**: otherwise stage 1 merges can't replay.
 
 
 Starting from the base pretokenization described above, here are the independent changes that can be made, with their implications:
@@ -288,7 +288,7 @@ Starting from the base pretokenization described above, here are the independent
 * Remove trailing whitespace `\s+(?!\S)`. Indentation merges with the following code: `····def foo` becomes one gap pre-token instead of `··· | ·def foo`. BPE can learn indentation-aware superwords.
 
 
-* Remove newlines `\s*[\r\n]+` (requires trailing whitespace already gone). Pre-tokens span across lines. This is aggressive: max pre-token size jumps from ~30 to ~170 characters on typical code.
+* Remove newlines `\s*[\r\n]+` (requires trailing whitespace already gone). Pre-tokens span across lines. This is the largest change: the maximum pre-token size goes from about 30 to about 170 characters on typical code.
 
 
 * Upgrade digits to `\p{N}{1,3}` or `\p{N}{1,3}(?=(?:\p{N}{3})(?:\P{N}|$))`. Combines adjacent stage 1 digit pre-tokens into groups, meaning can now have multi-digit tokens. The latter groups by threes, but _right to left_.
@@ -301,8 +301,8 @@ punctuation isolated** (` ?(?:[^\s\p{L}\p{N}\p{M}]\p{M}*){1,16}`: a punct char p
 marks, capped at 16; so operators `(`, `):`, `<=` stay separated and don't fuse into code superwords),
 **keep single digits** `\p{N}` (no `{1,3}` upgrade), and **keep `\s*[\r\n]+` and trailing-whitespace
 `\s+(?!\S)`** so line and indentation structure stay intact. Trailing whitespace is *not* removed, so
-superwords do not span indentation or line breaks. This is more conservative than the "config 4 / punct
-`{2,}`" option discussed above (which would let single punctuation fuse into superwords): the shipped
+superwords do not span indentation or line breaks. This is a smaller change than the first option above (punctuation
+`{2,}`, which would let single punctuation fuse into superwords): the shipped
 clean-multi keeps punctuation fully isolated, limiting superwords to natural-language word sequences.
 Further loosening (removing trailing whitespace / newlines, or the digit upgrade) remains to be
 experimented with.
@@ -327,17 +327,17 @@ punctuation pattern; the open choice is how aggressively stage 2 lets that bound
 - **apertus (and gpt4) let operators/markup fuse.** The apertus reference uses a non-space word prefix
   `[^\r\n\p{L}\p{N}]?`, so a leading operator/space attaches forward, and its stage-2 is more permissive
   about punctuation; under SuperBPE this lets operators and markup merge into code-spanning superwords
-  (` = `, ` + `, `) * `, `<div class`, `] =`). Empirically this is a real downstream cost: in the
-  SuperBPE-vs-base analysis in DEVELOPMENT_RECORD.md, apertus/gpt4 SuperBPE put ~19–21% of code-sample tokens into
-  added superwords versus ~5% for clean-multi, and the apertus-pretok models show a **reproducible MBPP
-  code-generation regression** (apertus ≪ clean). Keeping operators isolated is why `clean-multi` preserves code structure
-  best in the set.
+  (` = `, ` + `, `) * `, `<div class`, `] =`). The downstream effect is measurable: in the
+  SuperBPE-vs-base analysis in DEVELOPMENT_RECORD.md (section 3.7), apertus/gpt4 SuperBPE put about 19 to 21% of code-sample tokens into
+  added superwords against about 5% for clean-multi, and the apertus-pretok models have a **lower MBPP**
+  (0.058 against 0.190 for clean-multi at matched settings). Keeping operators isolated is the reason the clean-multi
+  tokenizers have the higher operator isolation and AST alignment.
 
-**Trade-offs:** fusing operators can shorten code slightly (fewer tokens for common operator+space
-patterns) and is harmless for pure compression, but it concentrates code structure into a few
-superword tokens that the model then has to emit exactly, the failure mode behind the apertus MBPP
-regression. Keeping them isolated costs a little code compression but preserves position-stable
-operator and line structure.
+**Trade-offs:** fusing operators shortens code slightly (fewer tokens for common operator+space
+patterns) and does not change compression elsewhere, but it puts operators and line breaks inside a few
+superword tokens that the model then has to emit exactly, which is the mechanism behind the lower apertus
+MBPP. Keeping them isolated gives slightly lower code compression and keeps each operator and line break
+as its own token.
 
 **Current choice:** keep operators/punctuation isolated (clean-multi). Operators and single punctuation
 are never fused; superwords are limited to natural-language word sequences.
@@ -386,11 +386,11 @@ which the lineage is still being iterated.
 ### Clean-multi family: concrete stage-1 patterns
 
 The patterns below are taken verbatim from the shipped `clean-multi` (capped) tokenizers used by the
-DEVELOPMENT_RECORD.md candidates (CleanV1-pretok + PA-BPE, `SuperBPE-clean-fw2full-hw`). They are the concrete form of the
+DEVELOPMENT_RECORD.md candidates (CleanV1-pretok + PA-BPE and CleanV1-pretok + PA-BPE + SuperBPE). They are the concrete form of the
 decisions above: case-splitting on, single-digit `\p{N}`, no trailing-char fusion, `\p{M}` in the word
 arms, the space-only word prefix `[ ]?` (apostrophes and punctuation do not attach forward), and
 `{1,16}` caps on punctuation/whitespace runs. The targeted extensions (`plus`, `plus2`, `plus3`) are
-shown in the next section as deltas against this baseline.
+shown in the next section as changes against this baseline.
 
 #### Clean-multi stage 1
 
@@ -429,7 +429,12 @@ other decisions in this document unchanged (same word arms, same digit handling,
 rule, same caps, same stage-2 reduction). Stage 2 is unaffected by the choice of extension; the
 clean-multi stage-2 regex above applies to all variants.
 
-Lineage summary (PA hyb+win, tuned config, FLORES dev meanTPS; lower is denser encoding):
+Lineage summary. Parity-aware BPE with hybrid-window on the `tuned` config. `meanTPS` is the mean number of
+tokens per FLORES dev sentence, averaged over the languages of this panel (lower is higher compression);
+`engCR` is the panel's English compression rate (higher is higher compression); `vocabCoV` is the
+coefficient of variation of per-language vocabulary utilization. The language set of this panel is not
+recorded; it is not the broad set of DEVELOPMENT_RECORD.md, where the same `clean-multi` tokenizer has
+Gini 0.081.
 
 | variant       | aggregate meanTPS | engCR | Gini   | vocabCoV | FineWeb-Edu B/tok |
 |---------------|-------------------|-------|--------|----------|-------------------|
@@ -441,8 +446,8 @@ Lineage summary (PA hyb+win, tuned config, FLORES dev meanTPS; lower is denser e
 
 `plus2` is within 0.15% of `apertus_capped` on aggregate meanTPS and matches it on Gini and vocab-CoV.
 The `plus3` row above is the isolated single-variable measurement, which was not run; `plus3` shipped as
-`preliminary_mul` (with `consv2` data changes), whose intrinsic and downstream numbers are in DEVELOPMENT_RECORD.md and REPORT_focus_candidates.md.
-No extension changes code compression; the 7.8% gap vs Apertus is structural (see the `plus2` subsection).
+`preliminary_mul` (with `consv2` data changes), whose intrinsic and downstream numbers are in DEVELOPMENT_RECORD.md and CANDIDATES.md.
+No extension changes code compression; the 7.8% lower code compression against Apertus comes from the word prefix (see the `plus2` subsection).
 
 #### plus: Tibetan tsek and English contractions
 
@@ -450,20 +455,20 @@ No extension changes code compression; the 7.8% gap vs Apertus is structural (se
 
 1. The word-arm leading character class is extended from `[ ]?` to `[ \x{0F0B}]?`. The Tibetan tsek
    (U+0F0B) is the canonical syllable separator in Tibetan-script languages. Under plain `clean-multi`,
-   every tsek became its own pretoken, fragmenting `bod_Tibt` and `dzo_Tibt` 1.5–1.7× vs Apertus on
-   FLORES.
+   every tsek became its own pretoken, so `bod_Tibt` and `dzo_Tibt` had 1.5 to 1.7 times the tokens per
+   sentence of Apertus on FLORES.
 2. A standalone first branch `(?i:'s|'t|'re|'ve|'m|'ll|'d)` is added, so the seven canonical English
    contraction suffixes tokenize as a unit (`don't` → `[don, 't]`) without the apostrophe attaching
    to the preceding word.
 
-Effect on the targeted languages (PA hyb+win, tuned config, FLORES dev meanTPS):
+Effect on the targeted languages (tokens per FLORES dev sentence, same setup as the lineage table):
 
 | lang     | clean-multi | plus       | apertus_capped |
 |----------|-------------|------------|----------------|
 | bod_Tibt | 80.2        | **48.2**   | 48.4           |
 | dzo_Tibt | 91.6        | **60.3**   | 60.6           |
 
-Sinotibetan family meanTPS falls 54.5 → 44.0, matching `apertus_capped` exactly. The tsek attach is
+The Sinotibetan family mean tokens per sentence falls from 54.5 to 44.0, equal to `apertus_capped`. The tsek attach is
 script-specific (U+0F0B does not occur outside Tibetan-script text), so no other family is affected.
 `plus` is not in the intrinsic roster in DEVELOPMENT_RECORD.md; it is documented here as the lineage
 step that matches Apertus compression on the Tibetan-script languages.
@@ -479,7 +484,7 @@ step that matches Apertus compression on the Tibetan-script languages.
    word arms (`don't` → `[don, 't]`, `I've` → `[I, 've]`). The removed branch was splitting `'tis` and
    `'sword` into `['t, is]` and `['s, word]`, which `plus2` leaves as single tokens.
 
-Effect on the targeted languages (PA hyb+win, tuned config, FLORES dev meanTPS):
+Effect on the targeted languages (tokens per FLORES dev sentence, same setup as the lineage table):
 
 | lang     | clean-multi | plus | plus2    | apertus_capped |
 |----------|-------------|------|----------|----------------|
@@ -491,12 +496,12 @@ fra/ita/cat all within 0.1% of `apertus_capped` after the change. Aggregate mean
 Apertus. No other family regressed between `plus` and `plus2`.
 
 **Known asymmetries.** Single-quoted code or dialogue strings tokenize asymmetrically: the opening `'`
-glues to the first inner word, the closing `'` stays a separate token. Curly-quote pairs (`'hello'`)
+attaches to the first inner word, and the closing `'` stays a separate token. Curly-quote pairs (`'hello'`)
 keep both quotes standalone. Languages where apostrophe is letter-internal (Wolof, Hausa, some Bantu
 Latin orthographies; Pinyin `Xi'an`) split at every apostrophe. These are the same behaviours
 `apertus_capped` exhibits.
 
-**Code compression, unchanged by plus2.** The 7.8% aggregate gap in code compression vs Apertus (`starcoder_sample`) persists.
+**Code compression, unchanged by plus2.** The 7.8% lower aggregate code compression against Apertus on the StarCoder sample persists.
 Apertus's broader leading-char class attaches underscores, dots, hyphens, slashes, and brackets to
 following identifiers (`self.x` → `[self, .x]`), which the clean-multi family does not. Matching
 Apertus on code compression would require abandoning the "punctuation never attaches" principle.
@@ -510,8 +515,8 @@ Apertus on code compression would require abandoning the "punctuation never atta
 ```
 
 ASCII apostrophe (U+0027) and right-curly quote (U+2019) now attach *backward* to the preceding word
-as well as forward (forward attach is inherited from `plus2`). The `(?!\p{L})` guard ensures the
-trailing match never steals from a following English contraction or French elision.
+as well as forward (forward attach is inherited from `plus2`). The `(?!\p{L})` guard prevents the
+trailing match from taking the apostrophe of a following English contraction or French elision.
 
 Target patterns:
 
@@ -531,7 +536,7 @@ config, so they are not an isolated `plus3`-vs-`plus2` per-language comparison
 (`consv2` shifts family weights independent of the pretokenizer).
 
 **Known asymmetries (additional to `plus2`).** Under `plus3`, the closing `'` of a single-quoted code
-or dialogue string now glues to the last inner word (vs being a separate token under `plus2`). For
+or dialogue string now attaches to the last inner word (against being a separate token under `plus2`). For
 curly-quote pairs `'hello'`, `plus3` attaches the right curly to the last inner word, while
 `apertus_capped` instead attaches the left curly to the first inner word; neither variant is fully
 symmetric. The letter-internal-apostrophe behaviour (Wolof / Hausa / Pinyin) is unchanged from `plus2`.
@@ -548,77 +553,39 @@ The clean-multi family has four design axes. The shipped candidates resolve them
   candidates use `tuned_consv2`. Headline intrinsics differ noticeably between configs at fixed
   pretokenizer: in `DEVELOPMENT_RECORD.md`, CleanV3-pretok + PA-BPE (rebalanced data) and CleanV3-pretok + PA-BPE (base parity, rebalanced data) (same `plus3` regex, same `consv2`,
   differing only on hybrid-window vs base) have sent/tok 0.0233 vs 0.0217 and Gini 0.087 vs 0.095.
-- **Hybrid-window vs base parity.** Orthogonal to the regex choice. The base-parity `plus3-cv2`
-  variant has higher AST alignment (0.728 vs 0.689) and lower multilingual compression. The
+- **Hybrid-window vs base parity.** Orthogonal to the regex choice. The base-parity variant,
+  CleanV3-pretok + PA-BPE (base parity, rebalanced data), has higher AST alignment (0.728 vs 0.689) and lower multilingual compression. The
   shipped candidates use hybrid-window; the base-parity variant is kept as an ablation.
 - **Tolerance for the apostrophe-attach asymmetries.** `plus2` and `plus3` introduce asymmetric
   tokenization of opening vs closing single quotes (code / dialogue strings) and asymmetric handling
   of curly-quote pairs. These are documented at each variant's subsection and match `apertus_capped`'s
   behaviour; they were accepted for the shipped candidates.
 
-## Training data
+## Training data and algorithms
 
-The current candidate tokenizers (PA-BPE and SuperBPE) train on a single corpus mixture defined by a
-grouped FineWeb-2 quota config (the `tuned` base and the sibling v6 variants discussed under
-[Algorithms](#algorithms)). Twenty-five input groups:
+The training corpus (25 input groups: 22 language families, English, code, and math), the per-family
+`quota_bytes` and `ratio` values, and the four shipped recipes are in TRAINING.md. The training
+algorithms (plain BPE, parity-aware BPE in base and hybrid-window modes, SuperBPE, Unigram LM), the
+parity configs (`tuned`, `consv2`, `modv2`), and their comparison are in DEVELOPMENT_RECORD.md, section 3
+and appendix B.
 
-- **22 multilingual family groups** (austroasiatic, austronesian, baltic, berber, celtic, cushitic,
-  dravidian, germanic, indoaryan, iranian, isolates_and_singletons, mande, nigercongo_bantu,
-  nigercongo_other, nigercongo_voltaniger, romance, semitic, sinotibetan, slavic, taikadai, turkic,
-  uralic) drawn from per-language FineWeb2 parquets.
-- **English**: 50 FineWeb CC-MAIN shards.
-- **Code**: 87 per-language StarCoder shards (Python, JavaScript, Java, …).
-- **Math**: InfiMath + FineMath samples.
+## Special tokens
 
-Per-family data volume is governed by a `quota_bytes` budget in the config. Two languages were
-dropped after a data-quality audit: `kas_Deva`
-(Devanagari-Kashmiri, script purity 0.59) and `lij_Latn` (Ligurian, 68% duplicate lines). The per-family `ratio` weights that bias
-the PA-BPE trainer's merge selection are a separate design axis, discussed under
-[Algorithms](#algorithms).
+### The v2 layout
 
-## Algorithms
+The four v2 tokenizers share 124 special tokens at ids 0 to 123, listed in
+`training/apertus_special_tokens.json`: `<unk>`(0), `<s>`(1), `</s>`(2), `<pad>`(3); the chat tokens
+`<|system_start|>` to `<|assistant_end|>`, `<|inner_prefix|>`/`<|inner_suffix|>`,
+`<|tools_prefix|>`/`<|tools_suffix|>`, `<|tool_output_start|>`/`<|tool_output_end|>`, `<|image|>`,
+`<|audio|>`; `<reflection>`/`</reflection>`; `<think>`/`</think>`; the PII tokens `<iban-pii>`(24),
+`<email-pii>`(25), `<ip-pii>`(26); and 97 reserve slots `<SPECIAL_27>` to `<SPECIAL_123>`. This layout
+was chosen by the Apertus engineering team. The post-processor wraps a single sequence as
+`<s> text </s>`; README.md describes the encode behavior that follows from it.
 
-The candidate roster covers four training algorithms, all run on byte-level token streams:
+### The Apertus v1 layout, for reference
 
-- **Plain BPE.** Hugging Face `tokenizers` `BpeTrainer`. Baseline reference; not a candidate.
-- **Parity-aware BPE.** A custom `ParityBpeTrainer` (merged into Hugging Face `tokenizers` via PR #1974) that biases merge
-  selection by per-group encoding cost, so low-resource languages receive proportionally more merges
-  than under plain BPE. Two operating modes:
-  - **base**: pure parity-driven merging from the start.
-  - **hybrid+window**: a `global_merges` warmup phase under a moving window
-    (W=100, α=2) precedes the parity phase. The `PA-Clean-*` and `PA-Apertus-*` ablation
-    tokenizers use `global_merges = 64_000`; the shipped `preliminary_*` recipes set it per
-    candidate (64000 for `preliminary_mul`, 110000 for `preliminary_enh` and `preliminary_euh`,
-    130000 for `preliminary_mul_200k`; see TRAINING.md, Per-tokenizer recipes). All four shipped
-    candidates use hybrid+window.
-
-  The per-family `ratio` values that bias merge selection are themselves a design axis. Three
-  configs were evaluated:
-  - **`tuned`** (v5): hand-tuned. European
-    family ratios ×1.2; two data-quality failures (`kas_Deva`, `lij_Latn`) dropped; script-mismatched
-    languages (`ydd_Hebr`, three Arabic-script entries) regrouped into `semitic`. Used by
-    CleanV1-pretok + PA-BPE, `PA-Clean-plus2-capped`, and the other `_tuned` candidates in DEVELOPMENT_RECORD.md.
-  - **`consv2`** and **`modv2`** (v6): keep `tuned`'s data-quality fixes and family regrouping,
-    but rescale each family's `tuned` ratio boost with a formula
-    `ratio = 1.0 + (tuned_ratio − 1.0) · max(f_data, f_speakers)` over per-family data volume
-    (FineWeb2 GB) and speaker count (the formula is generated from the `tuned` config, not from a
-    fresh baseline). `consv2` (D_REF=10 GB, S_REF=50 M, taikadai_cap=2.0) changes
-    three families; `modv2` (D_REF=50 GB, S_REF=200 M, taikadai_cap=1.75) changes eight. The
-    shipped candidates are trained under `tuned_consv2` (the `tuned` base with the `consv2` rescale),
-    as are the DEVELOPMENT_RECORD.md CleanV3-pretok + PA-BPE (rebalanced data) and CleanV3-pretok + PA-BPE (base parity, rebalanced data) rows.
-- **SuperBPE.** A two-stage extension. Stage 1 is plain or parity-aware BPE under the pretokenizer
-  above. Stage 2 replays the stage-1 merges and continues BPE under a coarser pretokenizer that
-  drops word boundaries, allowing cross-word "superwords" to form (`theĠcat`, `defĠmain`). Used by
-  the `SuperBPE-clean-*` and `SuperBPE-apertus-*` candidates.
-- **Unigram LM.** SentencePiece-style. Included only as a comparison reference (`Unigram-gpt4o`),
-  not a candidate.
-
-> Algorithms beyond these four were deferred because their implementations are not yet
-> production-grade (see DEVELOPMENT_RECORD.md, Missing evidence).
-
-## Special tokens (Apertus v1)
-
-Here is a summary of the tokens that were added to/removed from Apertus on top of the Mistral-Nemo tokenizer. 
+The tokens that Apertus v1 added to or removed from the Mistral-Nemo tokenizer. The v2 tokenizers do not
+use this layout.
 
 ### 1. Chat Template Token: `[INST]`
 
@@ -653,30 +620,30 @@ Apertus adds four **non-special** added tokens for common LaTeX commands. These 
 
 ---
 
-### 4. Domain-Specific Special Tokens (IDs 18–72)
+### 4. Domain-Specific Special Tokens (IDs 18 to 72)
 
 Apertus defines **55 special tokens** across several domains. These use the `<SPECIAL_N>` token placeholders set aside (for exactly this use case) in the Mistral-Nemo tokenizer.
 
-#### Code & Git (IDs 18–31)
+#### Code & Git (IDs 18 to 31)
 
-StarCoder / The Stack–style tokens for structured code pretraining:
+StarCoder and The Stack style tokens for structured code pretraining:
 
 | IDs | Tokens |
 |---|---|
-| 18–22 | `<filename>`, `<gh_stars>`, `<issue_start>`, `<issue_comment>`, `<issue_closed>` |
-| 23–27 | `<jupyter_start>`, `<jupyter_text>`, `<jupyter_code>`, `<jupyter_output>`, `<empty_output>` |
-| 28–31 | `<commit_before>`, `<commit_msg>`, `<commit_after>`, `<reponame>` |
+| 18 to 22 | `<filename>`, `<gh_stars>`, `<issue_start>`, `<issue_comment>`, `<issue_closed>` |
+| 23 to 27 | `<jupyter_start>`, `<jupyter_text>`, `<jupyter_code>`, `<jupyter_output>`, `<empty_output>` |
+| 28 to 31 | `<commit_before>`, `<commit_msg>`, `<commit_after>`, `<reponame>` |
 
-#### Reasoning (IDs 32–35)
+#### Reasoning (IDs 32 to 35)
 
 Chain-of-thought / reasoning-mode generation:
 
 | ID | Token |
 |---|---|
-| 32–33 | `<think>`, `</think>` |
-| 34–35 | `<answer>`, `</answer>` |
+| 32 to 33 | `<think>`, `</think>` |
+| 34 to 35 | `<answer>`, `</answer>` |
 
-#### PII Masking (IDs 36–38)
+#### PII Masking (IDs 36 to 38)
 
 For training data decontamination:
 
@@ -688,7 +655,7 @@ For training data decontamination:
 
 In the deployed v2 tokenizers these PII tokens are placed at IDs 24 to 26 (the 124-token spec compacts the used tokens into the low IDs).
 
-#### File & Code Translation (IDs 39–41)
+#### File & Code Translation (IDs 39 to 41)
 
 | ID | Token |
 |---|---|
@@ -696,17 +663,17 @@ In the deployed v2 tokenizers these PII tokens are placed at IDs 24 to 26 (the 1
 | 40 | `<code_to_intermediate>` |
 | 41 | `<intermediate_to_code>` |
 
-#### Pull Request Schema (IDs 42–57)
+#### Pull Request Schema (IDs 42 to 57)
 
 A full 16-token schema for structured PR pretraining:
 
 | IDs | Tokens |
 |---|---|
-| 42–46 | `<pr>`, `<pr_status>`, `<pr_is_merged>`, `<pr_base>`, `<pr_file>` |
-| 47–51 | `<pr_base_code>`, `<pr_diff>`, `<pr_diff_hunk>`, `<pr_comment>`, `<pr_event_id>` |
-| 52–57 | `<pr_review>`, `<pr_review_state>`, `<pr_review_comment>`, `<pr_in_reply_to_review_id>`, `<pr_in_reply_to_comment_id>`, `<pr_diff_hunk_comment_line>` |
+| 42 to 46 | `<pr>`, `<pr_status>`, `<pr_is_merged>`, `<pr_base>`, `<pr_file>` |
+| 47 to 51 | `<pr_base_code>`, `<pr_diff>`, `<pr_diff_hunk>`, `<pr_comment>`, `<pr_event_id>` |
+| 52 to 57 | `<pr_review>`, `<pr_review_state>`, `<pr_review_comment>`, `<pr_in_reply_to_review_id>`, `<pr_in_reply_to_comment_id>`, `<pr_diff_hunk_comment_line>` |
 
-#### Fill-in-the-Middle (IDs 58–60)
+#### Fill-in-the-Middle (IDs 58 to 60)
 
 For code infilling tasks:
 
@@ -716,17 +683,17 @@ For code infilling tasks:
 | 59 | `<\|fim_hole\|>` |
 | 60 | `<\|fim_end\|>` |
 
-#### Multi-Role Chat Template (IDs 61–72)
+#### Multi-Role Chat Template (IDs 61 to 72)
 
 A new chat format replacing the older `[INST]`/`[/INST]` scheme:
 
 | IDs | Tokens |
 |---|---|
-| 61–62 | `<\|system_start\|>`, `<\|system_end\|>` |
-| 63–64 | `<\|developer_start\|>`, `<\|developer_end\|>` |
-| 65–66 | `<\|user_start\|>`, `<\|user_end\|>` |
-| 67–68 | `<\|assistant_start\|>`, `<\|assistant_end\|>` |
-| 69–72 | `<\|inner_prefix\|>`, `<\|inner_suffix\|>`, `<\|tools_prefix\|>`, `<\|tools_suffix\|>` |
+| 61 to 62 | `<\|system_start\|>`, `<\|system_end\|>` |
+| 63 to 64 | `<\|developer_start\|>`, `<\|developer_end\|>` |
+| 65 to 66 | `<\|user_start\|>`, `<\|user_end\|>` |
+| 67 to 68 | `<\|assistant_start\|>`, `<\|assistant_end\|>` |
+| 69 to 72 | `<\|inner_prefix\|>`, `<\|inner_suffix\|>`, `<\|tools_prefix\|>`, `<\|tools_suffix\|>` |
 
 ---
 
