@@ -30,3 +30,4 @@ blog_revision_2026-09/
 .claude/
 # Pre-flip backup of the 200k tokenizer (ignore_merges=false, 2026-07-19); redundant with the identity check
 preliminary_mul_200k/tokenizer.json.bak_*
+.pytest_cache/

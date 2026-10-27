@@ -9,6 +9,7 @@ Documentation, by what you want to do:
 - Understand the design: [DESIGN.md](DESIGN.md), the pretokenization and special-token rationale.
 - Check the evidence: [DEVELOPMENT_RECORD.md](DEVELOPMENT_RECORD.md), the design ablations, downstream-LM results, reference-tokenizer comparison, and production-safety checks.
 - Reproduce a tokenizer: [TRAINING.md](TRAINING.md), the recipes, data, and verification steps.
+- Tokenize a corpus at scale: [tokenization_scripts/README.md](tokenization_scripts/README.md), the Slurm orchestrator and its configs (summary in the last section of this file).
 
 The `tokenizer.json` files are stored with git-lfs. A clone made without git-lfs installed contains pointer files in their place, and the usage examples below fail to load them; install git-lfs and run `git lfs pull`.
 
@@ -109,3 +110,34 @@ print(enc.tokens)               # ['<|user_start|>', 'hi', '<|user_end|>']
 ## Status
 
 Preliminary. All four tokenizers prepend `<s>` and append `</s>` via their post-processor (when `add_special_tokens=True`). The `chat_template` is still not written, so `apply_chat_template` is unavailable.
+
+## Tokenization at scale
+
+The production helpers live in `tokenization_scripts/`. They need a
+`data-pipeline-pretrain` checkout at `$HOME/data-pipeline-pretrain` on Clariden, which
+`tokenization_scripts/env.toml` mounts into the container. The provenance readers and the
+tokenizer's sequence-length guard come from data-pipeline-pretrain PRs #37 and #38, so
+check out #38's branch `stackv31-language-tokenization`, which contains #37, until they
+merge:
+
+```bash
+git clone -b stackv31-language-tokenization git@github.com:swiss-ai/data-pipeline-pretrain.git "$HOME/data-pipeline-pretrain"
+```
+
+On Clariden, run the Slurm orchestrator from the repository root with a config under
+`configs_apertus_v2/`:
+
+```bash
+config_path=tokenization_scripts/configs_apertus_v2/FineMath-CommonCrawl-subset.cfg
+./tokenization_scripts/tokenize_script.sh "$config_path"
+```
+
+The orchestrator accepts `--prepare-only` and `--dont_compute_dumps`. Arguments, config
+keys, validation and RCP use are documented in
+[`tokenization_scripts/README.md`](tokenization_scripts/README.md).
+
+The launcher caps each dump's tasks at its nonempty file count. Automatic worker
+selection uses at most 32 workers and divides the allocated CPUs among them, with
+up to 144 tokenizer threads per worker. A single-file dump therefore uses one
+worker. `TOKENIZER_WORKERS`, `TOKENIZER_THREADS`, `TOKENIZER_BATCH_BYTES` and
+`TOKENIZER_BATCH_SIZE` retain explicit overrides.

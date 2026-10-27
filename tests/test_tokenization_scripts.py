@@ -1,0 +1,242 @@
+import os
+import subprocess
+import sys
+import tempfile
+import unittest
+from pathlib import Path
+
+REPO_ROOT = Path(__file__).resolve().parents[1]
+TOKENIZATION_SCRIPTS = REPO_ROOT / "tokenization_scripts"
+
+
+class TokenizationScriptTest(unittest.TestCase):
+    def test_worker_reads_the_config_or_ninth_argument(self):
+        worker = (TOKENIZATION_SCRIPTS / "tokenize.sh").read_text(encoding="utf-8")
+        self.assertIn(
+            "TOKENIZER_THREADS=${9:-${TOKENIZER_THREADS:-}}",
+            worker,
+        )
+        self.assertIn("srun --ntasks=1", worker)
+
+    def capture_sbatch_arguments(self, tasks, extra_config=(), file_count=None):
+        if file_count is None:
+            file_count = tasks
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            metadata = root / "metadata"
+            (metadata / "dumps").mkdir(parents=True)
+            (metadata / "dumps" / "paths_file_0.txt").write_text(
+                "".join(f"part-{i}.parquet\n" for i in range(file_count)),
+                encoding="utf-8",
+            )
+            output = root / "output"
+            output.mkdir()
+            config = root / "config.cfg"
+            config.write_text(
+                "\n".join(
+                    [
+                        "TOKENIZER=tokenizer.json",
+                        "TOKENIZER_NAME=test-tokenizer",
+                        "DATASET_NAME=test-data",
+                        "COLUMN_KEY=text",
+                        "PATH_TO_RAW_DATASET=/unused",
+                        f"PATH_TO_PREPROCESSING_METADATA={metadata}",
+                        f"PATH_TO_OUTPUT_FOLDER={output}",
+                        "DUMPS_NUMBER=1",
+                        "REHYDRATE_FLAG=False",
+                        "EXTENSION=.parquet",
+                        f"NUMBER_OF_DATATROVE_TASKS={tasks}",
+                        "ACCOUNT=test",
+                        "NODES=1",
+                        "GPUS=0",
+                        "CPUS_PER_TASK=288",
+                        'NO_REQUEUE="--no-requeue"',
+                        "TIME=00:10:00",
+                        "PARTITION=test",
+                    ]
+                    + list(extra_config)
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            fake_bin = root / "bin"
+            fake_bin.mkdir()
+            capture = root / "sbatch-args.txt"
+            fake_sbatch = fake_bin / "sbatch"
+            fake_sbatch.write_text(
+                '#!/bin/sh\nprintf "%s\\n" "$@" > "$CAPTURE"\n',
+                encoding="utf-8",
+            )
+            fake_sbatch.chmod(0o755)
+            environment = os.environ.copy()
+            environment["PATH"] = f"{fake_bin}:{environment['PATH']}"
+            environment["CAPTURE"] = str(capture)
+
+            subprocess.run(
+                [
+                    "bash",
+                    str(TOKENIZATION_SCRIPTS / "tokenize_script.sh"),
+                    str(config),
+                    "--dont_compute_dumps",
+                ],
+                cwd=TOKENIZATION_SCRIPTS,
+                env=environment,
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+            arguments = capture.read_text(encoding="utf-8").splitlines()
+            return arguments
+
+    def test_safe_runtime_defaults_reach_worker_script(self):
+        arguments = self.capture_sbatch_arguments(tasks=4)
+        self.assertEqual(arguments[-4:], ["10000", "33554432", "4", "72"])
+
+    def test_single_worker_thread_pool_is_capped(self):
+        arguments = self.capture_sbatch_arguments(tasks=1)
+        self.assertEqual(arguments[-4:], ["10000", "33554432", "1", "144"])
+
+    def test_explicit_thread_override_is_preserved(self):
+        arguments = self.capture_sbatch_arguments(
+            tasks=1, extra_config=["TOKENIZER_THREADS=288"]
+        )
+        self.assertEqual(arguments[-4:], ["10000", "33554432", "1", "288"])
+
+    def capture_worker_rayon_threads(self, forwarded_threads):
+        """Run tokenize.sh itself and report the RAYON_NUM_THREADS it exports."""
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            metadata = root / "metadata"
+            (metadata / "dumps").mkdir(parents=True)
+            paths_file = metadata / "dumps" / "paths_file_0.txt"
+            paths_file.write_text("part.parquet\n", encoding="utf-8")
+            output = root / "output"
+            output.mkdir()
+            config = root / "config.cfg"
+            config.write_text(
+                "\n".join(
+                    [
+                        "TOKENIZER=/unused/tokenizer.json",
+                        "TOKENIZER_NAME=test-tokenizer",
+                        "DATASET_NAME=test-data",
+                        "COLUMN_KEY=text",
+                        "PATH_TO_RAW_DATASET=/unused",
+                        f"PATH_TO_PREPROCESSING_METADATA={metadata}",
+                        f"PATH_TO_OUTPUT_FOLDER={output}",
+                        "DUMPS_NUMBER=1",
+                        "REHYDRATE_FLAG=False",
+                        "EXTENSION=.parquet",
+                        "NUMBER_OF_DATATROVE_TASKS=4",
+                        "ACCOUNT=test",
+                        "NODES=1",
+                        "GPUS=0",
+                        "CPUS_PER_TASK=288",
+                        'NO_REQUEUE="--no-requeue"',
+                        "TIME=00:10:00",
+                        "PARTITION=test",
+                    ]
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            fake_bin = root / "bin"
+            fake_bin.mkdir()
+            capture = root / "rayon.txt"
+            fake_srun = fake_bin / "srun"
+            fake_srun.write_text(
+                '#!/bin/sh\nprintf "%s\\n" "${RAYON_NUM_THREADS-unset}" >> "$CAPTURE"\n',
+                encoding="utf-8",
+            )
+            fake_srun.chmod(0o755)
+            environment = os.environ.copy()
+            environment["PATH"] = f"{fake_bin}:{environment['PATH']}"
+            environment["CAPTURE"] = str(capture)
+            environment["SLURM_CPUS_PER_TASK"] = "288"
+
+            # The script continues into du/awk stats that need real tokenizer
+            # output, so its exit status is not the assertion here.
+            subprocess.run(
+                [
+                    "bash",
+                    str(TOKENIZATION_SCRIPTS / "tokenize.sh"),
+                    str(config),
+                    str(output / "dump-0"),
+                    str(root / "logs"),
+                    str(paths_file),
+                    str(metadata / "completed-dumps"),
+                    "10000",
+                    "33554432",
+                    "4",
+                    forwarded_threads,
+                ],
+                cwd=TOKENIZATION_SCRIPTS,
+                env=environment,
+                check=False,
+                capture_output=True,
+                text=True,
+            )
+            return capture.read_text(encoding="utf-8").splitlines()[0]
+
+    def test_worker_script_honours_the_forwarded_thread_count(self):
+        self.assertEqual(self.capture_worker_rayon_threads("72"), "72")
+
+    def test_explicit_runtime_controls_are_forwarded(self):
+        arguments = self.capture_sbatch_arguments(
+            tasks=4,
+            extra_config=[
+                "TOKENIZER_BATCH_SIZE=500",
+                "TOKENIZER_BATCH_BYTES=16777216",
+                "TOKENIZER_WORKERS=2",
+                "TOKENIZER_THREADS=64",
+            ],
+        )
+        self.assertEqual(arguments[-4:], ["500", "16777216", "2", "64"])
+
+    def test_adaptive_defaults_use_at_most_thirty_two_workers(self):
+        arguments = self.capture_sbatch_arguments(tasks=64)
+        self.assertEqual(arguments[-4:], ["10000", "33554432", "32", "9"])
+
+    def test_single_file_dump_uses_one_worker(self):
+        arguments = self.capture_sbatch_arguments(tasks=32, file_count=1)
+        self.assertEqual(arguments[-4:], ["10000", "33554432", "1", "144"])
+
+    def test_explicit_worker_override_is_preserved(self):
+        arguments = self.capture_sbatch_arguments(
+            tasks=32, extra_config=["TOKENIZER_WORKERS=64"]
+        )
+        self.assertEqual(arguments[-4:], ["10000", "33554432", "64", "9"])
+
+    def test_negative_one_worker_override_keeps_auto_semantics(self):
+        arguments = self.capture_sbatch_arguments(
+            tasks=32, extra_config=["TOKENIZER_WORKERS=-1"]
+        )
+        self.assertEqual(arguments[-4:], ["10000", "33554432", "-1", "9"])
+
+    def test_grouped_dump_size_uses_explicit_dataset_root(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            dataset = root / "prepared"
+            source = dataset / "examples" / "prose" / "part.parquet"
+            source.parent.mkdir(parents=True)
+            source.write_bytes(b"prepared-example")
+            paths = root / "metadata" / "dumps" / "prose" / "paths_file_0.txt"
+            paths.parent.mkdir(parents=True)
+            paths.write_text("examples/prose/part.parquet\n", encoding="utf-8")
+
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    str(TOKENIZATION_SCRIPTS / "compute_dump_size.py"),
+                    str(paths),
+                    str(dataset),
+                ],
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+
+            self.assertEqual(result.stdout.strip(), str(len(b"prepared-example")))
+
+
+if __name__ == "__main__":
+    unittest.main()
