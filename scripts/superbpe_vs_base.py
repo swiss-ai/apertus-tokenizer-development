@@ -26,13 +26,22 @@ import unicodedata
 from tokenizers import Tokenizer
 
 SP = chr(0x120)  # 'Ġ' byte-level space marker
-FLORES_DEVTEST = ("/capstor/store/cscs/swissai/a139/datasets/tokenizer_training/"
-                  "flores_parallel_data_devtest")
-TLM = "/users/cmeister747/pa_tokenizers_branch/experiments/tokenizer-lm-toks"
-SB = "/users/cmeister747/superbpe/trained_tokenizers"
 
-# (display name, base display name, family, mode, superbpe dir, base dir)
-PAIRS = [
+
+def required_env(name, what):
+    """Site-specific input directory, read from the environment. Unset aborts: there is no default."""
+    v = os.environ.get(name)
+    if not v:
+        raise SystemExit(f"ERROR: {what} not configured: set the {name} environment variable.")
+    return v
+
+
+def build_pairs(SB, TLM):
+    """(display name, base display name, family, mode, superbpe dir, base dir).
+
+    SB is the directory holding the SuperBPE tokenizers, TLM the directory holding their PA-BPE
+    bases; each entry below is a subdirectory containing a tokenizer.json."""
+    return [
     ("SuperBPE-clean-fw2full-hw",   "PA-Clean-capped",      "clean",   "hw",
      f"{SB}/clean_multi_capped_fw2full_hw",  f"{TLM}/nfc_clean_multi_capped_hybrid_window_tuned"),
     ("SuperBPE-apertus-fw2full-hw", "PA-Apertus-capped",    "apertus", "hw",
@@ -45,7 +54,7 @@ PAIRS = [
      f"{SB}/apertus_capped_fw2full",         f"{TLM}/nfc_apertus_capped_tuned"),
     ("SuperBPE-gpt4-fw2full",       "PA-gpt4-fw2full-base", "gpt4",    "base",
      f"{SB}/gpt4_fineweb2full",              f"{TLM}/nfc_gpt4_fineweb2full"),
-]
+    ]
 
 # Code-rich sample: numbers (digit-grouping differs by pretok family), operators,
 # indentation, identifiers, comments, strings, across a couple of languages.
@@ -98,7 +107,7 @@ def first_script(text):
     return "EMPTY"
 
 
-def analyze_pair(name, base_name, family, mode, sb_dir, base_dir, langs):
+def analyze_pair(name, base_name, family, mode, sb_dir, base_dir, langs, flores_dir):
     sbpe = Tokenizer.from_file(f"{sb_dir}/tokenizer.json")
     base = Tokenizer.from_file(f"{base_dir}/tokenizer.json")
     vs, vb = set(sbpe.get_vocab()), set(base.get_vocab())
@@ -117,7 +126,7 @@ def analyze_pair(name, base_name, family, mode, sb_dir, base_dir, langs):
     added_ids = {i for i in (sbpe.token_to_id(t) for t in added) if i is not None}
     lang_share = {}
     for lg in langs:
-        lines = open(f"{FLORES_DEVTEST}/{lg}.txt").read().splitlines()
+        lines = open(f"{flores_dir}/{lg}.txt").read().splitlines()
         ids = [i for e in sbpe.encode_batch(lines) for i in e.ids]
         n = len(ids)
         lang_share[lg] = (sum(1 for i in ids if i in added_ids) / n) if n else 0.0
@@ -158,16 +167,19 @@ def main(argv=None):
     ap = argparse.ArgumentParser()
     ap.add_argument("--output", required=True)
     args = ap.parse_args(argv)
+    flores_dir = required_env("FLORES_DEVTEST_DIR", "FLORES devtest parallel directory")
+    tlm_dir = required_env("PA_TOKENIZERS_DIR", "PA-BPE base tokenizer directory")
+    sb_dir = required_env("SUPERBPE_TOKENIZERS_DIR", "SuperBPE tokenizer directory")
     langs = sorted(os.path.basename(f)[:-4]
-                   for f in os.scandir(FLORES_DEVTEST) if f.name.endswith(".txt"))
+                   for f in os.scandir(flores_dir) if f.name.endswith(".txt"))
     pairs = []
-    for spec in PAIRS:
+    for spec in build_pairs(sb_dir, tlm_dir):
         name = spec[0]
         if not (os.path.exists(f"{spec[4]}/tokenizer.json") and os.path.exists(f"{spec[5]}/tokenizer.json")):
             print(f"  SKIP {name}: tokenizer or base missing")
             continue
         print(f"  analyzing {name} vs {spec[1]} ...")
-        pairs.append(analyze_pair(*spec, langs=langs))
+        pairs.append(analyze_pair(*spec, langs=langs, flores_dir=flores_dir))
     out = {"superbpe_vs_base": {
         "method": ("Each SuperBPE compared to the PA-BPE subword base it was grown from. 'added' = "
                    "tokens only in SuperBPE; 'sacrificed' = tokens only in the base; superword = "

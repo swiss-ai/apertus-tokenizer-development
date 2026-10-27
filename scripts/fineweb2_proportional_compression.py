@@ -135,9 +135,9 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--tokenizer-config", required=True,
                     help="JSON dict {name: {class, path}}")
-    ap.add_argument("--grouped-config",
-                    default="/users/cmeister747/pa_tokenizers_branch/configs/parity_aware_config_grouped_fineweb2full_quota_tuned_consv2_tailcuts_eng5g.json",
-                    help="parity-aware grouped config (any tuned variant — all share the same family→parquet mapping)")
+    ap.add_argument("--grouped-config", required=True,
+                    help="parity-aware grouped config with resolved dataset paths (any tuned variant: "
+                         "all share the same family-to-parquet mapping)")
     ap.add_argument("--target-bytes", type=int, default=5_000_000,
                     help="approximate total bytes to sample (default 5 MB)")
     ap.add_argument("--seed", type=int, default=0)

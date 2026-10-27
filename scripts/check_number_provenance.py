@@ -153,7 +153,7 @@ def main() -> None:
     ap.add_argument("-v", "--verbose", action="store_true")
     args = ap.parse_args()
 
-    files = args.files or [REPO / "REPORT_focus_candidates.md",
+    files = args.files or [REPO / "CANDIDATES.md",
                            REPO / "DEVELOPMENT_RECORD.md",
                            REPO / "BLOG_DRAFT.md"]
 

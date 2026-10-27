@@ -31,9 +31,9 @@ os.environ.setdefault("RAYON_NUM_THREADS", "1")
 import pyarrow.parquet as pq
 from tokenizers import Tokenizer
 
-# Same shard and loader as scripts/fineweb_edu_compression.py.
-DEFAULT_SHARD = ("/capstor/store/cscs/swissai/infra01/datasets/HuggingFaceFW/"
-                 "fineweb-edu/data/CC-MAIN-2013-20/train-00000-of-00014.parquet")
+# Same loader as the library's scripts/fineweb_edu_compression.py. The reported numbers used the
+# HuggingFaceFW/fineweb-edu shard data/CC-MAIN-2013-20/train-00000-of-00014.parquet; pass its
+# local path with --shard.
 DATASET_NAME = "FineWeb-Edu (HuggingFaceFW/fineweb-edu local mirror)"
 
 # The tokenizer set comes from --tokenizer-config (see load_roster). A hardcoded 5-entry
@@ -100,7 +100,8 @@ def main(argv=None):
     ap.add_argument("--output", required=True)
     ap.add_argument("--tokenizer-config", required=True,
                     help="Report tokenizer config; entries with a local tokenizer.json are timed.")
-    ap.add_argument("--shard", default=DEFAULT_SHARD)
+    ap.add_argument("--shard", required=True,
+                    help="local path of the FineWeb-Edu parquet shard (see DATASET_NAME)")
     ap.add_argument("--max-rows", type=int, default=1000)
     ap.add_argument("--repeats", type=int, default=11)
     ap.add_argument("--warmups", type=int, default=2)

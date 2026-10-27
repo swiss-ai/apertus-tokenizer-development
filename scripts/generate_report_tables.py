@@ -97,19 +97,17 @@ def table_vocab_usage() -> str:
 def table_vocab_usage_ablations() -> str:
     """The full design-ablation table in DEVELOPMENT_RECORD. Row labels and their order are taken
     from the document itself, so the editorial naming stays hand-controlled; only numbers are
-    generated. A label that cannot be resolved to an artifact key is an error, not a skipped row."""
+    generated. Labels map to artifact keys through scripts/tokenizer_display_names.json (tracked);
+    a label missing from that map is an error, not a skipped row."""
     pt = load("report_nonemitting_tokens.json")["nonemitting_tokens"]["per_tokenizer"]
-    src = (REPO / "archive/tooling/scripts/build_tokenizer_report.py").read_text()
-    body = re.search(r"^DISPLAY\s*=\s*\{(.*?)^\}", src, re.S | re.M).group(1)
-    inv = {v: k for k, v in re.findall(r'"([^"]+)"\s*:\s*"([^"]+)"', body)}
+    names_path = REPO / "scripts/tokenizer_display_names.json"
+    if not names_path.exists():
+        raise SystemExit(f"ERROR: label map not found: {names_path}")
+    label_to_key = json.loads(names_path.read_text())["labels"]
 
     def resolve(name):
-        if name in inv and inv[name] in pt:
-            return inv[name]
-        if name in pt:
-            return name
-        base = name.replace(" (tuned data)", "")
-        return inv.get(base) if inv.get(base) in pt else None
+        key = label_to_key.get(name)
+        return key if key in pt else None
 
     doc = (REPO / "DEVELOPMENT_RECORD.md").read_text().splitlines()
     labels, inside = [], False
@@ -140,8 +138,8 @@ def table_vocab_usage_ablations() -> str:
 
 
 TABLES = {
-    "throughput":            ("REPORT_focus_candidates.md", table_throughput),
-    "vocab-usage":           ("REPORT_focus_candidates.md", table_vocab_usage),
+    "throughput":            ("CANDIDATES.md", table_throughput),
+    "vocab-usage":           ("CANDIDATES.md", table_vocab_usage),
     "vocab-usage-ablations": ("DEVELOPMENT_RECORD.md",      table_vocab_usage_ablations),
 }
 

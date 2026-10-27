@@ -42,6 +42,15 @@ AST=starcoder_ast_config.json            # LIB repo ROOT, not configs/. A wrong/
 CFG="$SELF/configs/report_tokenizers.json"           # SELF (Apertus candidate roster)
 SLUG_MAP="$SELF/configs/extrinsic_slug_map.json"     # SELF (report-name -> tokenizer-lm slug)
 OUT="$SELF/results"                      # SELF (Apertus panels; gitignored)
+# Site-specific inputs, formerly hardcoded cluster paths. Each must be set; an unset variable
+# aborts here rather than running a step on a substituted input.
+FINEWEB_EDU_SHARD="${FINEWEB_EDU_SHARD:?set FINEWEB_EDU_SHARD to the local FineWeb-Edu parquet shard (step 9)}"
+GROUPED_CONFIG="${GROUPED_CONFIG:?set GROUPED_CONFIG to a parity-aware grouped config with resolved dataset paths (step 10)}"
+FAMILY_CONFIG="${FAMILY_CONFIG:?set FAMILY_CONFIG to the parity-aware grouped config that defines the language families (step 12)}"
+FLORES_DEVTEST_DIR="${FLORES_DEVTEST_DIR:?set FLORES_DEVTEST_DIR to the FLORES devtest parallel directory (step 7)}"
+PA_TOKENIZERS_DIR="${PA_TOKENIZERS_DIR:?set PA_TOKENIZERS_DIR to the directory of PA-BPE base tokenizers (step 7)}"
+SUPERBPE_TOKENIZERS_DIR="${SUPERBPE_TOKENIZERS_DIR:?set SUPERBPE_TOKENIZERS_DIR to the directory of SuperBPE tokenizers (step 7)}"
+export FLORES_DEVTEST_DIR PA_TOKENIZERS_DIR SUPERBPE_TOKENIZERS_DIR
 for f in "$CFG" "$SLUG_MAP" "$AST" configs/flores60_lang_config.json configs/core_lang_config.json \
          configs/flores_devtest_lang_config.json "$MC"; do
   [ -e "$f" ] || { echo "ERROR: required input not found: $f (cwd=$LIB)" >&2; exit 1; }
@@ -100,14 +109,14 @@ echo "[9/12] encode throughput on the English FineWeb-Edu snippet ..."
 # so it is sensitive to load on a shared node: treat cross-run differences below a few percent
 # as noise rather than a tokenizer effect.
 $PY/python "$SELF/scripts/fineweb_edu_throughput.py" --tokenizer-config "$CFG" \
-  --max-rows 1000 --repeats 11 \
+  --shard "$FINEWEB_EDU_SHARD" --max-rows 1000 --repeats 11 \
   --output "$OUT/report_finewebedu_throughput.json"
 
 echo "[10/12] FineWeb2-proportional multilingual compression ..."
 # Added 2026-07-17. Previously produced only in scratch *_focus dirs, one per tokenizer, which is
 # why two builds of the same tokenizer disagreed on disk. One roster-wide run replaces them.
 $PY/python "$SELF/scripts/fineweb2_proportional_compression.py" --tokenizer-config "$CFG" \
-  --target-bytes 5000000 --seed 0 \
+  --grouped-config "$GROUPED_CONFIG" --target-bytes 5000000 --seed 0 \
   --output "$OUT/report_fineweb2_proportional.json"
 
 echo "[11/12] extrinsic (downstream-LM) index from tokenizer-lm ..."
@@ -115,7 +124,7 @@ $PY/python "$SELF/scripts/extrinsic_index.py" --slug-map "$SLUG_MAP" --report-co
   --output "$OUT/report_extrinsic_index.json"
 
 echo "[12/12] family-faceted plots (PA-BPE training families) ..."
-$PY/python "$SELF/scripts/family_plots.py" \
+$PY/python "$SELF/scripts/family_plots.py" --family-config "$FAMILY_CONFIG" \
   --analysis "$OUT/report_flores_devtest/analysis_results_full.json" \
   --output-dir "$OUT/family_plots"
 

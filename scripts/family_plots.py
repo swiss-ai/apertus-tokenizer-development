@@ -36,12 +36,6 @@ TOKENIZERS = [
     "Gemma 3", "Llama 4", "OLMo 2", "Qwen 3", "K2 Think",
 ]
 
-DEFAULT_FAMILY_CFG = (
-    "/users/cmeister747/pa_tokenizers_branch/configs/"
-    "parity_aware_config_grouped_fineweb2full_quota_tuned.json"
-)
-
-
 def parse_family_config(path):
     """Return {family_name: sorted [flores_codes]}; skips empty/non-language families
     (code, english, math have no fineweb2_sample inputs in the config)."""
@@ -147,7 +141,7 @@ def plot_family_facets(values, families, tokenizers, metric_label, out_path,
 
 def main(argv=None):
     ap = argparse.ArgumentParser()
-    ap.add_argument("--family-config", default=DEFAULT_FAMILY_CFG,
+    ap.add_argument("--family-config", required=True,
                     help="PA-BPE tuned parity config that defines family -> [flores_codes].")
     ap.add_argument("--analysis", default="results/report_flores_devtest/analysis_results_full.json",
                     help="Analysis JSON (default: full FLORES devtest, 205 langs).")
